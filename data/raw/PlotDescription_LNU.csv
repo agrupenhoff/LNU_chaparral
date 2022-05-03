@@ -1,4 +1,4 @@
-Location,OBS,PlotID,Quad (if applicable),Date1,Date2,num_burn,Elevation_m,Belt_info,Transect direction,Aspect_degree,Slope %,cool/warm_slope,2022 notes,2021 notes
+Location,OBS,plotid,Quad (if applicable),Date1,Date2,num_burn,Elevation_m,Belt_info,Transect direction,Aspect_degree,Slope %,cool/warm_slope,2022 notes,2021 notes
 Bobcat,HS,BOB001,,4/13/2021,3/25/2022,5,370,left downhill,150,93,27,cool,,
 Bobcat,HS,BOB001,Q1,4/13/2021,3/25/2022,5,,,,70,31,cool,,
 Bobcat,HS,BOB001,Q2,4/13/2021,3/25/2022,5,,,,100,21,cool,,
