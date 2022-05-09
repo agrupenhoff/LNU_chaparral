@@ -1,0 +1,316 @@
+---
+title: "LNU Analysis"
+author: "Ashley Grupenhoff"
+date: "5/6/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "C:/Users/ashle/OneDrive/Documents/R/LNU_chaparral/LNU_chaparral")
+library(tidyverse)
+library(tibble)
+library(dplyr)
+library(ggplot2)
+library(vegan)
+library(plyr)
+library(brms)
+
+```
+
+## Input clean data
+```{r data}
+#raw
+TOT_species_LNU <- read.csv("data/raw/TOT_species_LNU.csv")
+subplot_species_LNU <- read.csv("data/raw/SubPlot_SPP_LNU.csv")
+plot.description_LNU <- read.csv("data/raw/PlotDescription_LNU.csv")
+severity_LNU <- read.csv("data/raw/Severity_LNU.csv")
+GroundCover_LNU <- read.csv("data/raw/GroundCover_LNU.csv")
+Mortality_LNU <- read.csv("data/raw/Mortality_LNU.csv")
+SpeciesList <- read.csv("data/raw/SpeciesList_LNU.csv")
+
+plot.description.short <- plot.description_LNU %>% 
+  filter(Quad..if.applicable. == "") %>% 
+  select(plotid, num_burn, cool.warm_slope) %>% 
+  dplyr::rename(PlotID = plotid)
+severity_LNU_byplot <- severity_LNU %>% 
+  group_by(PlotID) %>% 
+  dplyr::summarise(Mean_diam_cm = mean(Mean_diam)) %>% 
+  mutate(mean_diam_mm = Mean_diam_cm *10)
+species.short <- SpeciesList %>% 
+  select(spp, Lifeform, Native_nonnative, fac.obl) 
+
+severity.plotdescription.LNU <- left_join(plot.description.short,severity_LNU_byplot, by= "PlotID")
+#write.csv(severity.plotdescription.LNU,"data/clean/LNU_severity.plotdescription.csv" )
+
+
+```
+
+## Severity 
+
+```{r severity}
+  ggplot(data=severity.plotdescription.LNU, aes(x=num_burn, y=(mean_diam_mm), colour= cool.warm_slope))+
+  geom_smooth()
+
+```
+
+## Richness of Total 250 m2 plot
+
+```{r richness total}
+
+LNU_species_join <- left_join(TOT_species_LNU, severity.plotdescription.LNU, by= "PlotID")
+LNU_species_join <- left_join(LNU_species_join, species.short, by= "spp")
+
+LNU_species <- LNU_species_join %>% 
+  mutate(plotid_time=paste(PlotID, num_burn, cool.warm_slope, year, sep= " ")) %>% 
+  mutate(species_type=paste(spp, SEEDLING.RESPROUT, sep="_")) %>% 
+  add_count(plotid_time, name="n_species") %>% 
+  add_count(plotid_time, Native_nonnative, name="n_species_native.non") %>% 
+  add_count(plotid_time, Lifeform, name="n_species_lifeform")
+
+LNU_species$num_burn <- as.numeric(LNU_species$num_burn)
+str(LNU_species)
+#write.csv(LNU_species, "data/clean/LNU_totalspecies.csv")
+
+#PLOT ALL SPECIES
+LNU_species %>% 
+  group_by(plotid_time) %>% 
+  dplyr::summarise(n_species = mean(n_species)) %>% 
+  separate(plotid_time, c("PlotID", "num_burn", "cool.warm.slope", "year")) %>%  
+  ggplot(aes(x = as.numeric(num_burn), y = n_species)) +
+  geom_smooth(method="lm")
+  
+#PLOT TOTAL RICHNESS NATIVE AND NONNATIVE
+LNU_species %>% 
+  filter(Native_nonnative =="native"|
+           Native_nonnative == "non-native"|
+           Native_nonnative == "invasive non-native") %>% 
+  group_by(plotid_time, Native_nonnative) %>% 
+  dplyr::summarise(n_species_native.non = mean(n_species_native.non)) %>%    
+  separate(plotid_time, c("PlotID", "num_burn", "cool.warm.slope", "year")) %>% 
+ggplot(aes(x = as.numeric(num_burn), y = n_species_native.non, colour = Native_nonnative)) +
+  geom_smooth(method="lm")
+
+
+
+```
+
+## Subplot Native & Nonnative
+
+
+```{r}
+
+LNU_subplot_native <- read.csv("data/clean/LNU_subplot_native_long.csv" )
+LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
+
+ 
+
+```
+
+
+
+## Richness
+
+
+```{r Richness, echo=FALSE}
+#calculate richness
+#sum up the number of non-zero entries per row 
+#first column ignored ([,-1]) since this is the site name, not species count
+LNU_richness_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_yr_quad,function(x) {
+  data.frame(NONNATIVE_RICHNESS=sum(x[-1]>0.0))})
+
+LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
+  data.frame(NATIVE_RICHNESS=sum(x[-1]>0.0))})
+
+LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_yr_quad")
+LNU_richness <- LNU_richness %>% 
+  pivot_longer(!plot_yr_quad,names_to = "native.nonnative",
+               values_to = "richness") %>% 
+  separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+LNU_richness <- left_join(LNU_richness, severity.plotdescription.LNU, by="PlotID")
+LNU_richness$num_burn <- as.numeric(LNU_richness$num_burn)
+str(LNU_richness)
+
+#write.csv(LNU_richness, "data/clean/LNU_subplot_RICHNESS.csv")
+
+
+#plot
+  filter(Native_nonnative =="native"|
+           Native_nonnative == "non-native"|
+           Native_nonnative == "invasive non-native") %>% 
+  group_by(plotid_time, Native_nonnative) %>% 
+  dplyr::summarise(n_species_native.non = count(n_species_native.non)) %>% 
+  separate(plotid_time, c("PlotID", "num_burn", "cool.warm.slope", "year"))
+
+LNU_richness %>% 
+  mutate(plotid_time = paste(PlotID, year, num_burn, cool.warm_slope, sep= " ")) %>% 
+  group_by(plotid_time, native.nonnative) %>% 
+  dplyr::summarise(richness = mean(richness)) %>% 
+  separate(plotid_time, c("PlotID", "year", "num_burn", "cool.warm.slope", sep = " ")) %>% 
+ggplot(aes(x=as.numeric(num_burn), y=richness, colour = native.nonnative))+
+  geom_smooth(method = lm)+
+  facet_wrap(~cool.warm.slope)
+  #xlab('Fire Frequency') +
+  #ylab('Species Frequency')
+
+
+              
+            
+```
+
+## Shannon Diversity
+
+```{r Shannon}
+
+######SHANNON DIVERSITY
+#sum up the number of non-zero entries per row 
+#first column ignored ([,-1]) since this is the site name, not species count
+LNU_shan_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_yr_quad,function(x) {
+  data.frame(NONNATIVE_shanDiv=diversity(x[-1], index="shannon"))})
+
+LNU_shan_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
+  data.frame(NATIVE_shanDiv=diversity(x[-1], index="shannon"))})
+
+LNU_shanDiv <- left_join(LNU_shan_native, LNU_shan_nonnative, by="plot_yr_quad")
+LNU_shanDiv <- LNU_shanDiv %>% 
+  pivot_longer(!plot_yr_quad,names_to = "native.nonnative",
+               values_to = "shanDiv") %>% 
+  separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+LNU_shanDiv <- left_join(LNU_shanDiv,severity.plotdescription.LNU, by="PlotID")
+LNU_shanDiv$num_burn <- as.numeric(LNU_shanDiv$num_burn)
+str(LNU_shanDiv)
+
+#write.csv(LNU_shanDiv, "data/clean/LNU_subplot_shanDiv.csv")
+
+LNU_shanDiv %>% 
+  mutate(plotid_time = paste(PlotID, year, num_burn, cool.warm_slope, sep= " ")) %>% 
+  group_by(plotid_time, native.nonnative) %>% 
+  dplyr::summarise(ShanDiv = mean(shanDiv)) %>% 
+  separate(plotid_time, c("PlotID", "year", "num_burn", "cool.warm.slope", sep = " ")) %>% 
+ggplot(aes(x=as.numeric(num_burn), y=ShanDiv, colour = native.nonnative))+
+  geom_smooth(method="lm")
+
+
+```
+
+
+# Seedling Density
+
+```{r Seedling Density }
+
+#####SEEDLING DENSITY
+  
+  seedling_sh_count <- subplot_species_LNU %>% 
+    filter(cover_count_ht == "count") %>% 
+    filter(seedling_resp == "seedling") %>% 
+    mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
+    mutate(plot_spp = paste(plot_year, spp, by=" ")) %>%
+    select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
+    mutate_all(na_if,"") %>% 
+    mutate_all(~replace_na(., 0)) %>% 
+    pivot_longer(!plot_spp, names_to = 'quad', values_to = 'density')  
+  seedling_sh_count$density <- as.numeric(seedling_sh_count$density)
+    seedling_sh_count <- seedling_sh_count %>% 
+      group_by(plot_spp) %>% 
+    dplyr::summarise(density = mean(density)) %>% 
+      mutate(density_250m = density * 250) %>% 
+    separate(plot_spp, c("plot_year", "spp"), sep=" ") %>% 
+    separate(plot_year, c("PlotID", "year"), sep="_") 
+  
+  str(seedling_sh_count)
+seedling_sh_count <- left_join(seedling_sh_count, severity.plotdescription.LNU, by="PlotID")
+seedling_sh_count <- left_join(seedling_sh_count, species.short, by ="spp")
+seedling_sh_count$num_burn <- as.numeric(seedling_sh_count$num_burn)
+seedling_sh_count$density <- as.numeric(seedling_sh_count$density)
+
+#write.csv(seedling_sh_count, "data/clean/LNU_subplot_seedlingCount.csv")
+
+#plot total seedling density
+seedling_sh_count %>% 
+  filter(spp == "ACMGLA"|
+          spp == "ADFA"|
+           spp == "CEACUN"|
+           spp == "ARCMAN"|
+           spp == "CEAOLI") %>% 
+ggplot(aes(x=num_burn, y=density_250m, colour= spp))+
+    geom_smooth(method="lm")+
+    facet_wrap(~cool.warm_slope)
+  
+  ###FIND MISSING CEAOLI
+    
+
+
+    
+
+
+```
+
+
+
+```{r}
+seedling_sh_cover <- subplot_species_LNU %>% 
+      filter(cover_count_ht == "cover") %>% 
+      filter(seedling_resp == "seedling") %>%
+      mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
+      mutate(plot_spp = paste(plot_year, spp, by=" ")) %>% 
+      select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
+      mutate_all(na_if,"") %>% 
+      mutate_all(~replace_na(., 0)) %>% 
+      pivot_longer(!plot_spp, names_to = 'quad', values_to = 'cover') %>% 
+      separate(plot_spp, c("plot_year", "spp"), sep=" ") %>% 
+      separate(plot_year, c("PlotID", "year"), sep="_") 
+seedling_sh_cover$cover[seedling_sh_cover$cover == "tr"] <- "0.05"
+seedling_sh_cover$cover[seedling_sh_cover$cover == "TR"] <- "0.05"
+    
+str(seedling_sh_cover)
+    seedling_sh_cover <- left_join(seedling_sh_cover, plot.description.short, by="PlotID")
+    seedling_sh_cover <- left_join(seedling_sh_cover, species.short, by ="spp")
+    seedling_sh_cover$num_burn <- as.numeric(seedling_sh_cover$num_burn)
+    seedling_sh_cover$cover <- as.numeric(seedling_sh_cover$cover)
+
+    ggplot(data=seedling_sh_cover, aes(x=num_burn, y=cover, colour=spp))+
+      geom_smooth(method = "lm")
+
+    
+    
+  sh_count <- subplot_species_LNU %>% 
+      filter(cover_count_ht == "count") %>% 
+      mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
+      mutate(plot_spp = paste(plot_year, spp, by=" ")) %>% 
+      select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
+      mutate_all(na_if,"") %>% 
+      mutate_all(~replace_na(., 0)) %>% 
+      pivot_longer(!plot_spp, names_to = 'quad', values_to = 'density') %>% 
+      separate(plot_spp, c("plot_year", "spp"), sep=" ") %>% 
+      separate(plot_year, c("PlotID", "year"), sep="_") 
+  
+    
+    
+    sh_count <- left_join(sh_count, plot.description.short, by="PlotID")
+   sh_count <- left_join(sh_count, species.short, by ="spp")
+    sh_count$num_burn <- as.numeric(sh_count$num_burn)
+    sh_count$density <- as.numeric(sh_count$density)
+    
+    ggplot(data=sh_count, aes(x=num_burn, y=density, colour=spp))+
+      geom_smooth(method = "lm")
+    
+    
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
