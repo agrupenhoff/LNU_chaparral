@@ -15,6 +15,11 @@ library(ggplot2)
 library(vegan)
 library(plyr)
 library(brms)
+library(rstan)
+library(tidybayes)
+#run faster
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
 
 ```
 
@@ -41,7 +46,11 @@ species.short <- SpeciesList %>%
   select(spp, Lifeform, Native_nonnative, fac.obl) 
 
 severity.plotdescription.LNU <- left_join(plot.description.short,severity_LNU_byplot, by= "PlotID")
+severity.plotdescription.LNU$num_burn <- as.numeric(severity.plotdescription.LNU$num_burn)
 #write.csv(severity.plotdescription.LNU,"data/clean/LNU_severity.plotdescription.csv" )
+
+severity.plotdescription.LNU %>% 
+  dplyr::count(num_burn, cool.warm_slope)
 
 
 ```
@@ -49,8 +58,14 @@ severity.plotdescription.LNU <- left_join(plot.description.short,severity_LNU_by
 ## Severity 
 
 ```{r severity}
-  ggplot(data=severity.plotdescription.LNU, aes(x=num_burn, y=(mean_diam_mm), colour= cool.warm_slope))+
-  geom_smooth()
+  ggplot(data=severity.plotdescription.LNU, aes(x=num_burn, y=(mean_diam_mm), colour=  cool.warm_slope))+
+                     geom_smooth()+
+                     xlab("Fire frequency")+
+                     ylab("Fire Severity (mean diameter mm)")+
+  labs(col="Slope")
+ggsave("figures/fireseverity.frequency.png")
+
+
 
 ```
 
@@ -103,6 +118,9 @@ ggplot(aes(x = as.numeric(num_burn), y = n_species_native.non, colour = Native_n
 LNU_subplot_native <- read.csv("data/clean/LNU_subplot_native_long.csv" )
 LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
 
+LNU_subplot_nonnative <- read.csv("data/clean/LNU_subplot_nonnative_long.csv" )
+LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
+
  
 
 ```
@@ -117,10 +135,10 @@ LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
 #sum up the number of non-zero entries per row 
 #first column ignored ([,-1]) since this is the site name, not species count
 LNU_richness_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_yr_quad,function(x) {
-  data.frame(NONNATIVE_RICHNESS=sum(x[-1]>0.0))})
+  data.frame(NONNATIVE_RICHNESS=sum(x[-2]>0.0))})
 
 LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
-  data.frame(NATIVE_RICHNESS=sum(x[-1]>0.0))})
+  data.frame(NATIVE_RICHNESS=sum(x[-2]>0.0))})
 
 LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_yr_quad")
 LNU_richness <- LNU_richness %>% 
@@ -135,13 +153,6 @@ str(LNU_richness)
 #write.csv(LNU_richness, "data/clean/LNU_subplot_RICHNESS.csv")
 
 
-#plot
-  filter(Native_nonnative =="native"|
-           Native_nonnative == "non-native"|
-           Native_nonnative == "invasive non-native") %>% 
-  group_by(plotid_time, Native_nonnative) %>% 
-  dplyr::summarise(n_species_native.non = count(n_species_native.non)) %>% 
-  separate(plotid_time, c("PlotID", "num_burn", "cool.warm.slope", "year"))
 
 LNU_richness %>% 
   mutate(plotid_time = paste(PlotID, year, num_burn, cool.warm_slope, sep= " ")) %>% 
@@ -167,10 +178,10 @@ ggplot(aes(x=as.numeric(num_burn), y=richness, colour = native.nonnative))+
 #sum up the number of non-zero entries per row 
 #first column ignored ([,-1]) since this is the site name, not species count
 LNU_shan_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_yr_quad,function(x) {
-  data.frame(NONNATIVE_shanDiv=diversity(x[-1], index="shannon"))})
+  data.frame(NONNATIVE_shanDiv=diversity(x[-2], index="shannon"))})
 
 LNU_shan_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
-  data.frame(NATIVE_shanDiv=diversity(x[-1], index="shannon"))})
+  data.frame(NATIVE_shanDiv=diversity(x[-2], index="shannon"))})
 
 LNU_shanDiv <- left_join(LNU_shan_native, LNU_shan_nonnative, by="plot_yr_quad")
 LNU_shanDiv <- LNU_shanDiv %>% 
@@ -190,8 +201,41 @@ LNU_shanDiv %>%
   group_by(plotid_time, native.nonnative) %>% 
   dplyr::summarise(ShanDiv = mean(shanDiv)) %>% 
   separate(plotid_time, c("PlotID", "year", "num_burn", "cool.warm.slope", sep = " ")) %>% 
-ggplot(aes(x=as.numeric(num_burn), y=ShanDiv, colour = native.nonnative))+
-  geom_smooth(method="lm")
+ggplot(aes(x=as.numeric(num_burn), y=ShanDiv, fill=native.nonnative))+
+  geom_smooth(method="lm")+
+  xlab("Fire Frequency") +
+  ylab("Shannon Diversity")
+ggsave("figures/shanDiv_numBurn.png")
+
+#Bayesian model
+str(LNU_shanDiv)
+nativeShan <- LNU_shanDiv %>% 
+  filter(native.nonnative == "NATIVE_shanDiv")
+nonnativeShan <- LNU_shanDiv %>% 
+  filter(native.nonnative == "NONNATIVE_shanDiv")
+
+priors <- c(prior(normal(0,1), class = Intercept))
+
+nativeshan.brm <- brm(formula = shanDiv ~ num_burn + 
+                                    mean_diam_mm +
+                                    factor(cool.warm_slope)+
+                                    (1|year),
+              data = nativeShan,
+              prior = priors,
+              iter = 4000)
+summary(nativeshan.brm)
+pp_check(nativeshan.brm)
+get_variables(nativeshan.brm)
+conditional_effects(nativeshan.brm)
+
+
+```
+# Seedling and resprout density and cover data
+This was cleaned up in lnu_clean file
+
+```{r seedling resprout data}
+
+shrub_density <- read.csv("data/clean/LNU_subplot_seedling_density.csv")
 
 
 ```
@@ -201,45 +245,52 @@ ggplot(aes(x=as.numeric(num_burn), y=ShanDiv, colour = native.nonnative))+
 
 ```{r Seedling Density }
 
-#####SEEDLING DENSITY
-  
-  seedling_sh_count <- subplot_species_LNU %>% 
-    filter(cover_count_ht == "count") %>% 
-    filter(seedling_resp == "seedling") %>% 
-    mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
-    mutate(plot_spp = paste(plot_year, spp, by=" ")) %>%
-    select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
-    mutate_all(na_if,"") %>% 
-    mutate_all(~replace_na(., 0)) %>% 
-    pivot_longer(!plot_spp, names_to = 'quad', values_to = 'density')  
-  seedling_sh_count$density <- as.numeric(seedling_sh_count$density)
-    seedling_sh_count <- seedling_sh_count %>% 
-      group_by(plot_spp) %>% 
-    dplyr::summarise(density = mean(density)) %>% 
-      mutate(density_250m = density * 250) %>% 
-    separate(plot_spp, c("plot_year", "spp"), sep=" ") %>% 
-    separate(plot_year, c("PlotID", "year"), sep="_") 
-  
-  str(seedling_sh_count)
-seedling_sh_count <- left_join(seedling_sh_count, severity.plotdescription.LNU, by="PlotID")
-seedling_sh_count <- left_join(seedling_sh_count, species.short, by ="spp")
-seedling_sh_count$num_burn <- as.numeric(seedling_sh_count$num_burn)
-seedling_sh_count$density <- as.numeric(seedling_sh_count$density)
+#####DENSITY
+str(shrub_density)
+shrub_density <- left_join(shrub_density, severity.plotdescription.LNU, by="PlotID")
+shrub_density <- left_join(shrub_density, species.short, by ="spp")
+shrub_density$num_burn <- as.numeric(shrub_density$num_burn)
+shrub_density$density <- as.numeric(shrub_density$density)
 
 #write.csv(seedling_sh_count, "data/clean/LNU_subplot_seedlingCount.csv")
 
 #plot total seedling density
-seedling_sh_count %>% 
-  filter(spp == "ACMGLA"|
-          spp == "ADFA"|
-           spp == "CEACUN"|
-           spp == "ARCMAN"|
-           spp == "CEAOLI") %>% 
-ggplot(aes(x=num_burn, y=density_250m, colour= spp))+
-    geom_smooth(method="lm")+
-    facet_wrap(~cool.warm_slope)
+unique(shrub_density$seed.resprout)
+str(shrub_density)
+
+#seedlings all together
+shrub_density %>%
+  filter(seed.resprout == "SEEDLING") %>% 
+  group_by(spp, num_burn, cool.warm_slope) %>% 
+  dplyr::summarise(density_avg = mean(density_250m)) %>% 
+ggplot(aes(x=factor(num_burn), y=density_avg, fill = spp))+
+    geom_col()
+ggsave("figures/shrub_densityall.png")
+
+
+
+shrub_density %>%
+  filter(seed.resprout == "SEEDLING") %>% 
+  filter(fac.obl == "OBL-S") %>% 
+ group_by(spp, num_burn, cool.warm_slope) %>% 
+  dplyr::summarise(density_avg = mean(density_250m)) %>% 
+ggplot(aes(x=factor(num_burn), y=density_avg, fill = spp))+
+    geom_col()+
+  facet_wrap(~cool.warm_slope)
+ggsave("figures/shrub_density_OBLS.png")
+
+shrub_density %>%
+  filter(seed.resprout == "SEEDLING") %>% 
+  filter(fac.obl == "FAC") %>% 
+ group_by(spp, num_burn, cool.warm_slope) %>% 
+  dplyr::summarise(density_avg = mean(density_250m)) %>% 
+ggplot(aes(x=factor(num_burn), y=density_avg, fill = spp))+
+    geom_col()+
+  facet_wrap(~cool.warm_slope)
+ggsave("figures/shrub_density_FAC.png")
   
-  ###FIND MISSING CEAOLI
+
+  
     
 
 
