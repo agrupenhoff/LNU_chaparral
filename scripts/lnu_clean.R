@@ -111,8 +111,34 @@ shrub_density_plot <- shrub_density_long %>%
   separate(spp.seed.resp, c("spp", "seed.resprout"), sep="_") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
-write.csv(shrub_density_plot, "data/clean/LNU_subplot_seedling_density.csv")
+write.csv(shrub_density_plot, "data/clean/LNU_subplot_shrub_density.csv")
+
+#SHRUB COVER
+shrub_cover_long <- subplot_species_LNU %>% 
+  filter(cover_count_ht == "COVER") %>% 
+  mutate(species_seed.resp = paste(spp, seedling_resp, sep ="_")) %>% 
+  mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
+  mutate(plot_spp = paste(plot_year, species_seed.resp, by=" ")) %>% 
+  select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
+  mutate_all(na_if,"") %>% 
+  mutate_all(~replace_na(., 0)) %>% 
+  pivot_longer(!plot_spp, names_to = 'quad', values_to = 'cover') %>% 
+  separate(plot_spp, c("plot_year", "spp.seed.resp"), sep=" ") 
+
+str(shrub_cover_long)
+shrub_cover_long$cover[shrub_cover_long$cover == "tr"] <- "0.05"
+shrub_cover_long$cover[shrub_cover_long$cover == "TR"] <- "0.05"
+shrub_cover_long$cover <- as.numeric(shrub_cover_long$cover)
+
+shrub_cover_plot <- shrub_cover_long %>% 
+  group_by(plot_year, spp.seed.resp) %>% 
+  dplyr::summarise(cover = mean(cover)) %>% 
+  separate(spp.seed.resp, c("spp", "seed.resprout"), sep="_") %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+write.csv(shrub_cover_plot, "data/clean/LNU_subplot_shrub_cover.csv")
     
+
 
     
     
