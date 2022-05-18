@@ -17,9 +17,10 @@ library(plyr)
 library(brms)
 library(rstan)
 library(tidybayes)
-
-library(lme4)
-library(lmerTest)
+library(jtools)
+library(bayesplot)
+library(bayestestR)
+library(emmeans)
 
 #run faster
 rstan_options(auto_write = TRUE)
@@ -62,14 +63,43 @@ severity.plotdescription.LNU %>%
 ## Severity 
 
 ```{r severity}
-  ggplot(data=severity.plotdescription.LNU, aes(x=num_burn, y=(mean_diam_mm), colour=  cool.warm_slope))+
-                     geom_smooth()+
+  
+sevdata <- ddply(severity.plotdescription.LNU, c("num_burn"),
+                 summarise,
+                 N = sum(!is.na(mean_diam_mm)),
+                 mean_diam_mm_avg = mean(mean_diam_mm, na.rm=TRUE),
+                 sd= sd(mean_diam_mm, na.rm = TRUE),
+                 se = sd/sqrt(N)) 
+
+
+ggplot(data=sevdata %>%  filter(num_burn != "7"), aes(x=as.factor(num_burn), y=mean_diam_mm_avg))+
+                    geom_errorbar(aes(ymin=mean_diam_mm_avg-se, ymax=mean_diam_mm_avg+se), width=.1, size=.7)+
+                    geom_line()+
+                    geom_point(size=3, aes(colour=factor(num_burn)))+
+                    scale_colour_viridis_d()+
                      xlab("Fire frequency")+
-                     ylab("Fire Severity (mean diameter mm)")+
-  labs(col="Slope")
-ggsave("figures/fireseverity.frequency.png")
+                     ylab("Fire Severity")+
+                    theme_bw()+
+                   theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 16),
+                          panel.grid = element_blank())
+ggsave(file="figures/sev~freq.svg", width = 4.5, height = 3)
+ggsave(file="figures/sev~freq.png", width = 4.5, height = 3)
 
 
+
+
+
+#LINEAR MODEL
+qqnorm(severity.plotdescription.LNU$mean_diam_mm, pch = 1, frame = FALSE)
+qqline(severity.plotdescription.LNU$mean_diam_mm, col = "steelblue", lwd = 2)
+
+m.sev <- lm(num_burn ~ mean_diam_mm ,
+                 data = severity.plotdescription.LNU, REML = F)
+summary(m.sev)
+coef(summary(m.nativeRich))
+plot(m.sev)
 
 ```
 
@@ -129,6 +159,52 @@ LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
 
 ```
 
+## NMDS
+
+```{r}
+library(vegan)
+
+load(file = "data/clean/LNU_subplot_wide_species.RData")
+
+#make community matrix on which to base ordination
+LNUspecies = LNU_subplot_wide %>% select(-PlotID)
+#columns that contain descriptive data
+LNUplot_ord = LNU_subplot_wide %>% 
+  select(PlotID) 
+LNUplot_env <- left_join(LNUplot_ord, plot.description.short %>% distinct(), by = "PlotID")
+
+set.seed(123) #reproduce same results
+NMDS <- metaMDS(LNUspecies, distance="bray", k=2) #no transformation of species data is made here prior to bray curtis dissimilarities being calculated. 
+NMDS
+
+#env.fit
+nmds_plot <- cbind(NMDS$point, LNUplot_env)
+nmds_species <- left_join(cbind(as.data.frame(NMDS$species), 
+                                as.data.frame(row.names(as.data.frame(NMDS$species)))), 
+                               # %>% rename(spp = "row.names(as.data.frame(NMDS$species))")
+                                species.short, by = c("row.names(as.data.frame(NMDS$species))"="spp" ))
+
+nmds_plot$num_burn <- as.factor(nmds_plot$num_burn)
+
+ggplot(nmds_plot %>% filter(num_burn != "7"), aes(x=MDS1, y=MDS2))+
+  geom_point(size = 4, aes(x=MDS1, y=MDS2, color = num_burn))+
+  #geom_point(data= nmds_species, size = 1.8, alpha = 0.5, aes(x=MDS1, y=MDS2, 
+  #                                               shape = Native_nonnative))
+  stat_ellipse(aes(x=MDS1, y=MDS2, color = num_burn))+
+  scale_color_viridis_d()+
+  guides(col=guide_legend("Fire Frequency"))+
+  theme(axis.text = element_text(size=15),
+        text = element_text(size = 16),
+        panel.grid = element_blank(),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=11))
+ggsave(file="figures/NMDS.svg", width = 5, height = 3)
+ggsave(file="figures/NMDS.png", width = 5, height = 3)
+
+
+
+```
+
 
 
 ## Richness
@@ -151,45 +227,98 @@ LNU_richness <- LNU_richness %>%
   separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 LNU_richness <- left_join(LNU_richness, severity.plotdescription.LNU, by="PlotID")
-LNU_richness$num_burn <- as.numeric(LNU_richness$num_burn)
+LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
 str(LNU_richness)
+
+nativeRich <- LNU_richness %>% 
+  filter(native.nonnative == "NATIVE_RICHNESS") %>% 
+  filter(num_burn != "7")
+nonnativeRich <- LNU_richness %>% 
+  filter(native.nonnative == "NONNATIVE_RICHNESS") %>% 
+  filter(num_burn != "7")
 
 #write.csv(LNU_richness, "data/clean/LNU_subplot_RICHNESS.csv")
 
 
+##BAYESIAN
+#repeated measures looking at richness based on different fire frequencies 
+summary(LNU_richness)
+plot(richness ~ num_burn, data=nativeRich)
+plot(richness ~ num_burn, data=nonnativeRich)
 
-LNU_richness %>% 
-  mutate(plotid_time = paste(PlotID, year, num_burn, cool.warm_slope, sep= " ")) %>% 
-  group_by(plotid_time, native.nonnative) %>% 
-  dplyr::summarise(richness = mean(richness)) %>% 
-  separate(plotid_time, c("PlotID", "year", "num_burn", "cool.warm.slope", sep = " ")) %>% 
-ggplot(aes(x=as.numeric(num_burn), y=richness, colour = native.nonnative))+
-  geom_smooth(method = lm)+
-  #facet_wrap(~cool.warm.slope)
-  xlab('Fire Frequency') +
-  ylab('Species Frequency')
+#gaussian based model seems better than gamma 
+n.natRich <- brm(richness ~ num_burn, data = nativeRich,
+                 prior=c(set_prior("normal(0,50)", class= "b")), cores=4)
+summary(n.natRich)
+contrasts(nativeRich$num_burn)
+hist(resid(n.natRich))
+pp_check(n.natRich)
+
+plot(conditional_effects(n.natRich))
+me <- conditional_effects(n.natRich, "num_burn")
+plot(me, plot=FALSE)[[1]]+
+  scale_color_grey()+
+   xlab("Fire frequency")+
+                     ylab("Native Species Richness")+
+                    theme_bw()+
+                    theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 14),
+                          panel.grid = element_blank())
+ggsave(file="figures/native_speciesRich.svg", width = 4, height = 3.5)
+ggsave(file="figures/native_speciesRich.png", width = 4, height = 3.5)
+
+hdi(n.natRich)
+
+hypNatRich = hypothesis(n.natRich,
+                        hypothesis = c("Intercept=0",
+                                       "Intercept+num_burn2=0",
+                                       "Intercept+num_burn3=0",
+                                       "Intercept+num_burn4=0",
+                                       "Intercept+num_burn5=0"))
+toplot = hypNatRich$samples
+toplot
+names(toplot) = c("1 Fire","2 Fire","3 Fires","4 Fires","5 Fires")
+mcmc_intervals(toplot, prob_outer = .95, prob=.68)+
+xlab("Native Richness")
+
+#gaussian based model seems better than gamma 
+n.nonnatRich <- brm(richness ~ num_burn, data = nonnativeRich,
+                 prior=c(set_prior("normal(0,50)", class= "b")), cores=4)
+summary(n.nonnatRich)
+contrasts(nonnativeRich$num_burn)
+hist(resid(n.nonnatRich))
+pp_check(n.nonnatRich)
+
+plot(conditional_effects(n.nonnatRich))
+me <- conditional_effects(n.nonnatRich, "num_burn")
+plot(me, plot=FALSE)[[1]]+
+  scale_color_grey()+
+   xlab("Fire frequency")+
+                     ylab("Nonnative Richness")+
+                    theme_bw()+
+                    theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 14),
+                          panel.grid = element_blank())
+ggsave(file="figures/nonnative_rich.svg", width = 4, height = 3.5)
+ggsave(file="figures/nonnative_rich.png", width = 4, height = 3.5)
+
+hdi(n.nonnatRich)
+
+hypnonNatRich = hypothesis(n.nonnatRich,
+                        hypothesis = c("Intercept=0",
+                                       "Intercept+num_burn2=0",
+                                       "Intercept+num_burn3=0",
+                                       "Intercept+num_burn4=0",
+                                       "Intercept+num_burn5=0"))
+toplot = hypnonNatRich$samples
+toplot
+names(toplot) = c("1 Fire","2 Fire","3 Fires","4 Fires","5 Fires")
+mcmc_intervals(toplot, prob_outer = .95, prob=.68)+
+xlab("Native Richness")
 
 
-str(LNU_shanDiv)
-nativeRich <- LNU_richness %>% 
-  filter(native.nonnative == "NATIVE_RICHNESS")
-nonnativeRich <- LNU_richness %>% 
-  filter(native.nonnative == "NONNATIVE_RICHNESS")
-
-
-m.nativeRich <- lm(richness ~ mean_diam_mm * num_burn + cool.warm_slope + as.factor(year),
-                 data = nativeRich,
-                 REML = F)
-summary(m.nativeRich)
-coef(summary(m.nativeRich))
-
-m.nonnative <- lm(richness ~ mean_diam_mm * num_burn + cool.warm_slope + as.factor(year),
-                 data = nonnativeRich,
-                 REML = F)
-summary(m.nonnative)
-coef(summary(m.native))
-
-              
             
 ```
 
@@ -216,44 +345,114 @@ LNU_shanDiv <- LNU_shanDiv %>%
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
 LNU_shanDiv <- left_join(LNU_shanDiv,severity.plotdescription.LNU, by="PlotID")
-LNU_shanDiv$num_burn <- as.numeric(LNU_shanDiv$num_burn)
+LNU_shanDiv$num_burn <- as.factor(LNU_shanDiv$num_burn)
 str(LNU_shanDiv)
+nativeShan <- LNU_shanDiv %>% 
+  filter(native.nonnative == "NATIVE_shanDiv") %>% 
+  filter(num_burn != "7")
+nonnativeShan <- LNU_shanDiv %>% 
+  filter(native.nonnative == "NONNATIVE_shanDiv") %>% 
+  filter(num_burn != "7")
 
 #write.csv(LNU_shanDiv, "data/clean/LNU_subplot_shanDiv.csv")
 
-LNU_shanDiv %>% 
-  mutate(plotid_time = paste(PlotID, year, num_burn, cool.warm_slope, sep= " ")) %>% 
-  group_by(plotid_time, native.nonnative) %>% 
-  dplyr::summarise(ShanDiv = mean(shanDiv)) %>% 
-  separate(plotid_time, c("PlotID", "year", "num_burn", "cool.warm.slope", sep = " ")) %>% 
-ggplot(aes(x=as.numeric(num_burn), y=ShanDiv, col=native.nonnative))+
-  geom_smooth(method="lm")+
-  #facet_wrap(~year)+
-  xlab("Fire Frequency") +
-  ylab("Shannon Diversity")
-ggsave("figures/shanDiv_numBurn.png")
+
+#Bayesian model
+
+plot(shanDiv ~ num_burn, data=nativeShan)
+plot(shanDiv ~ num_burn, data=nonnativeShan)
 
 
-str(LNU_shanDiv)
-nativeShan <- LNU_shanDiv %>% 
-  filter(native.nonnative == "NATIVE_shanDiv")
-nonnativeShan <- LNU_shanDiv %>% 
-  filter(native.nonnative == "NONNATIVE_shanDiv")
+#gaussian based model seems better than gamma 
+str(nativeShan)
+n.natShan <- brm(shanDiv ~ num_burn, data = nativeShan,
+                 prior=c(set_prior("normal(0,50)", class= "b")), cores=4)
+summary(n.natShan)
+hist(resid(n.natShan))
+pp_check(n.natShan)
 
 
-m.native <- lm(shanDiv ~ mean_diam_mm * num_burn + cool.warm_slope + as.factor(year),
-                 data = nativeShan,
-                 REML = F)
-summary(m.native)
-coef(summary(m.native))
+plot(conditional_effects(n.natShan))
+me <- conditional_effects(n.natShan, "num_burn")
+plot(me, plot=FALSE)[[1]]+
+  scale_color_grey()+
+   xlab("Fire frequency")+
+                     ylab("Native Shannon Diversity")+
+                    theme_bw()+
+                    theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 14),
+                          panel.grid = element_blank())
+ggsave(file="figures/native_shanDiv.svg", width = 4, height = 3.5)
+ggsave(file="figures/native_shanDiv.png", width = 4, height = 3.5)
 
-m.nonnative <- lm(shanDiv ~ mean_diam_mm * num_burn + cool.warm_slope + as.factor(year),
-                 data = nonnativeShan,
-                 REML = F)
-summary(m.nonnative)
-coef(summary(m.native))
+
+hdi(n.natShan)
+#get adjusted means
+warp_em <- emmeans::emmeans(n.natShan, ~ num_burn)
+warp_em
+#get all possible constrasts
+cont <- contrast(warp_em, "tukey")
+cont
+#get posterior draws
+con_posterior <- gather_emmeans_draws(cont)
+#plot
+ggplot(con_posterior,
+       aes(y = contrast, x = .value)) +
+  geom_halfeyeh() +
+  geom_vline(xintercept = 0, color = "red", lty = 2)
+emmip(n.natShan,  ~ num_burn, CIs = TRUE, cov.reduce = range)
 
 
+hypNatShan = hypothesis(n.natShan,
+                        hypothesis = c("Intercept=0",
+                                       "Intercept+num_burn2=0",
+                                       "Intercept+num_burn3=0",
+                                       "Intercept+num_burn4=0",
+                                       "Intercept+num_burn5=0"))
+toplot = hypNatShan$samples
+toplot
+names(toplot) = c("1 Fire","2 Fire","3 Fires","4 Fires","5 Fires")
+mcmc_intervals(toplot, prob_outer = .95, prob=.68)+
+xlab("Native Shannon Diversity")
+
+#gaussian based model seems better than gamma 
+str(nonnativeShan)
+n.nonnatShan <- brm(shanDiv ~ num_burn, data = nonnativeShan,
+                 prior=c(set_prior("normal(0,50)", class= "b")), cores=4)
+summary(n.nonnatShan)
+hist(resid(n.nonnatShan))
+pp_check(n.nonnatShan)
+
+
+
+
+plot(conditional_effects(n.nonnatShan))
+me <- conditional_effects(n.nonnatShan, "num_burn") 
+plot(me, plot=FALSE)[[1]]+
+  scale_color_grey()+
+   xlab("Fire frequency")+
+                     ylab("Nonnative Shannon Diversity")+
+                    theme_bw()+
+                   theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 14),
+                          panel.grid = element_blank())
+ggsave(file="figures/nonnative_shanDiv.svg", width = 4, height = 3.5)
+ggsave(file="figures/nonnative_shanDiv.png", width = 4, height = 3.5)
+hdi(n.nonnatShan)
+
+hypnonNatShan = hypothesis(n.nonnatShan,
+                        hypothesis = c("Intercept=0",
+                                       "Intercept+num_burn2=0",
+                                       "Intercept+num_burn3=0",
+                                       "Intercept+num_burn4=0",
+                                       "Intercept+num_burn5=0"))
+toplot = hypnonNatShan$samples
+toplot
+names(toplot) = c("1 Fire","2 Fire","3 Fires","4 Fires","5 Fires")
+mcmc_intervals(toplot, prob_outer = .95, prob=.68)+
+xlab("Nonnative Shannon Diversity")
 
 
 
@@ -265,6 +464,8 @@ This was cleaned up in lnu_clean file
 
 shrub_density <- read.csv("data/clean/LNU_subplot_shrub_density.csv")
 shrub_cover <- read.csv("data/clean/LNU_subplot_shrub_cover.csv")
+
+shrub_density_wide <- read.csv("data/clean/LNU_subplot_shrub_density_wide.csv")
 
 ```
 
@@ -279,8 +480,8 @@ shrub_density <- left_join(shrub_density, severity.plotdescription.LNU, by="Plot
 shrub_density <- left_join(shrub_density, species.short, by ="spp")
 shrub_density$num_burn <- as.numeric(shrub_density$num_burn)
 shrub_density$density <- as.numeric(shrub_density$density)
+shrub_density$density_ha <- as.numeric(shrub_density$density_ha)
 
-#write.csv(seedling_sh_count, "data/clean/LNU_subplot_seedlingCount.csv")
 
 #plot total seedling density
 unique(shrub_density$seed.resprout)

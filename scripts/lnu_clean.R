@@ -29,6 +29,25 @@ species.short <- SpeciesList %>%
   select(spp, Lifeform, Native_nonnative, fac.obl) 
 severity.plotdescription.LNU <- left_join(severity_LNU_byplot, plot.description.short, by= "PlotID")
 
+#AVERAGE OF ALL SPECIES
+str(subplot_species_LNU)
+
+
+LNU_subplot_wide <- subplot_species_LNU %>% 
+  filter(cover_count_ht == "cover"|
+           cover_count_ht == "") %>% 
+  select(PlotID, year, spp ,Q1, Q2, Q3, Q4, Q5)  %>% 
+  mutate_all(na_if,"") %>% 
+  mutate_all(~replace_na(., 0)) %>%
+  mutate(across(c(Q1:Q5), ~ifelse(. == "TR" | . == "tr", "0.05", .))) %>% 
+  mutate(across(c(Q1:Q5), ~as.numeric(.))) %>% 
+  mutate(avg_Q = (Q1+Q2+Q3+Q4+Q5)/5) %>% 
+  select(PlotID, spp, avg_Q) %>%  
+  pivot_wider(names_from = "spp", values_from = "avg_Q",
+              values_fill = 0, values_fn = sum)
+              
+save(LNU_subplot_wide, file = "data/clean/LNU_subplot_wide_species.RData")
+
 
 #NATIVE SPECIES
 LNU_subplot_native <- subplot_species_LNU %>% 
@@ -107,11 +126,31 @@ shrub_density_long$density <- as.numeric(shrub_density_long$density)
 shrub_density_plot <- shrub_density_long %>% 
   group_by(plot_year, spp.seed.resp) %>% 
   dplyr::summarise(density = mean(density)) %>% 
-  mutate(density_250m = density * 250) %>% 
+  mutate(density_ha = density/0.0001) %>% 
   separate(spp.seed.resp, c("spp", "seed.resprout"), sep="_") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
 write.csv(shrub_density_plot, "data/clean/LNU_subplot_shrub_density.csv")
+
+str(shrub_density_plot)
+
+shrub_density_wide <- shrub_density_plot %>% 
+  select(PlotID, year, spp, seed.resprout, density_ha) %>% 
+  pivot_wider(
+    names_from = c(spp, seed.resprout),
+    values_from = "density_ha",
+    values_fill = 0,
+    values_fn = sum
+  )  
+str(shrub_density_wide)
+
+shrub_density_long <- shrub_density_wide %>% 
+  mutate(plotid_year = paste(PlotID, year, sep="_")) %>% 
+  pivot_longer(!plotid_year,
+               names_to = "spp", 
+               values_to = "density_ha")
+
+write.csv(shrub_density_wide, "data/clean/LNU_subplot_shrub_density_wide.csv")
 
 #SHRUB COVER
 shrub_cover_long <- subplot_species_LNU %>% 
