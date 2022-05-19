@@ -6,11 +6,12 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "C:/Users/ashle/OneDrive/Documents/R/LNU_chaparral/LNU_chaparral")
-library(tidyverse)
 library(tibble)
 library(dplyr)
+library(tidyverse)
 library(ggplot2)
 library(vegan)
 library(plyr)
@@ -462,10 +463,11 @@ This was cleaned up in lnu_clean file
 
 ```{r seedling resprout data}
 
-shrub_density <- read.csv("data/clean/LNU_subplot_shrub_density.csv")
+
 shrub_cover <- read.csv("data/clean/LNU_subplot_shrub_cover.csv")
 
 shrub_density_wide <- read.csv("data/clean/LNU_subplot_shrub_density_wide.csv")
+shrub_density_long <- read.csv("data/clean/LNU_subplot_shrub_density_long.csv")
 
 ```
 
@@ -474,78 +476,101 @@ shrub_density_wide <- read.csv("data/clean/LNU_subplot_shrub_density_wide.csv")
 
 ```{r Seedling Density }
 
+library(lattice)
+library(MASS)
+library(lmtest)
+library(pscl)
+library(ggeffects)
+
 #####DENSITY
-str(shrub_density)
-shrub_density <- left_join(shrub_density, severity.plotdescription.LNU, by="PlotID")
-shrub_density <- left_join(shrub_density, species.short, by ="spp")
-shrub_density$num_burn <- as.numeric(shrub_density$num_burn)
-shrub_density$density <- as.numeric(shrub_density$density)
-shrub_density$density_ha <- as.numeric(shrub_density$density_ha)
+str(shrub_density_long)
+shrub_density_long <- left_join(shrub_density_long, plot.description.short, by="PlotID")
+shrub_density_long <- left_join(shrub_density_long, species.short, by ="spp")
 
 
-#plot total seedling density
-unique(shrub_density$seed.resprout)
-unique(shrub_density$spp)
-str(shrub_density)
+plot(density_ha ~ as.factor(num_burn), data=shrub_density_long)
+#check numbe of 0s
+100*sum(shrub_density_long$density_ha == 0)/nrow(shrub_density_long)
+#88% are 0s lolllll
 
-#seedlings all together
-shrub_density %>%
-  filter(seed.resprout == "SEEDLING") %>% 
-  filter(spp == "ERICAL"|
-           spp == "ADFA" |
-           spp == "LEPCAL"|
-           spp == "CEACUN"|
-           spp == "CEAOLI"|
-           spp == "ARCMAN") %>% 
-ggplot(aes(x=num_burn, y=density_250m, col = spp))+
-    geom_smooth(method="lm", se=F)
-    geom_smooth(method="lm", aes(group =1))
-
-shrub_density %>%
-  filter(seed.resprout == "SEEDLING") %>% 
-  filter(spp == "ERICAL"|
-           spp == "ADFA" |
-           spp == "LEPCAL"|
-           spp == "CEACUN"|
-           spp == "CEAOLI"|
-           spp == "ARCMAN") %>%
-  group_by(spp, num_burn, cool.warm_slope) %>% 
-  dplyr::summarise(density_avg = mean(density_250m)) %>% 
-ggplot(aes(x=factor(num_burn), y=density_avg, fill = spp))+
-    geom_col()
-ggsave("figures/shrub_densityall.png")
-
-
-
-shrub_density %>%
-  filter(seed.resprout == "SEEDLING") %>% 
+#zero inflated model for obligate seeders only
+shrub_density_OBLS <- shrub_density_long %>%
+  filter(seed.resp == "SEEDLING") %>% 
   filter(fac.obl == "OBL-S") %>% 
-  filter(  spp == "CEACUN"|
-           spp == "CEAOLI"|
-           spp == "ARCMAN") %>%
- group_by(spp, num_burn, cool.warm_slope) %>% 
-  dplyr::summarise(density_avg = mean(density_250m)) %>% 
-ggplot(aes(x=factor(num_burn), y=density_avg, fill = spp))+
-    geom_col()+
-  facet_wrap(~cool.warm_slope)
-ggsave("figures/shrub_density_OBLS.png")
+  filter(spp != "ACMGLA") %>% 
+   filter(num_burn != "7") 
+unique(shrub_density_OBLS$spp)
+M1 <- zeroinfl(density_ha ~ as.factor(num_burn),
+               dist = "negbin",
+          data = shrub_density_OBLS)
+summary(M1)
+#check for over/underdispersion
+E2 <- resid(M1, type = "pearson")
+N <- nrow(shrub_density_long)
+p <- length(coef(M1))
+sum(E2^2)/(N-p)
+#.095 looks good
 
-shrub_density %>%
-  filter(seed.resprout == "SEEDLING") %>% 
+mydf <- ggpredict(M1, type= "zi_random", terms = "num_burn") 
+
+ggplot(mydf, aes(as.factor(x), predicted))+
+  geom_point(size=3,position = position_dodge(.1), aes(color=as.factor(x))) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+              position = position_dodge(.1),
+              width=.1, size=.3) +
+  scale_colour_viridis_d()+
+  xlab("Fire frequency")+
+  ylab("Obligate Seedling density/Ha")+
+  theme_bw()+
+  theme(legend.position = "none",
+  axis.text = element_text(size=12),
+  text = element_text(size = 14),
+  panel.grid = element_blank())
+ggsave(file="figures/obl_seed_predicted.svg", width = 4.5, height = 3.5)
+ggsave(file="figures/obl_seed_predicted.png", width = 4.5, height = 3.5)
+
+
+#zero inflated model for facultative seeders only
+shrub_density_FAC <- shrub_density_long %>%
+  filter(seed.resp == "SEEDLING") %>% 
   filter(fac.obl == "FAC") %>% 
- group_by(spp, num_burn, cool.warm_slope) %>% 
-  dplyr::summarise(density_avg = mean(density_250m)) %>% 
-ggplot(aes(x=factor(num_burn), y=density_avg, fill = spp))+
-    geom_col()+
-  facet_wrap(~cool.warm_slope)
-ggsave("figures/shrub_density_FAC.png")
-  
+  filter(spp != "MIMAUR") %>% 
+    filter(spp != "HOLDIS") %>% 
+   filter(num_burn != "7") 
+unique(shrub_density_FAC$spp)
 
-  
-    
+M2 <- zeroinfl(density_ha ~ as.factor(num_burn),
+               dist = "negbin",
+          data = shrub_density_FAC)
+summary(M2)
+#check for over/underdispersion
+E3 <- resid(M2, type = "pearson")
+N <- nrow(shrub_density_long)
+p <- length(coef(M2))
+sum(E3^2)/(N-p)
+#.286 nooo 
+
+mydf2 <- ggpredict(M2, type= "zi_random", terms = "num_burn") 
+mydf2
+ggplot(mydf2, aes(as.factor(x), predicted))+
+  geom_point(size=3,position = position_dodge(.1), aes(color=as.factor(x))) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+              position = position_dodge(.1),
+              width=.1, size=.3) +
+  scale_colour_viridis_d()+
+  xlab("Fire frequency")+
+  ylab("Facultative Seedling density/Ha")+
+  theme_bw()+
+  theme(legend.position = "none",
+  axis.text = element_text(size=12),
+  text = element_text(size = 14),
+  panel.grid = element_blank())
+ggsave(file="figures/fac_seed_predicted.svg", width = 4.5, height = 3.5)
+ggsave(file="figures/fac_seed_predicted.png", width = 4.5, height = 3.5)
 
 
-    
+
+
 
 
 ```
