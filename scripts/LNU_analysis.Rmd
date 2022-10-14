@@ -3,6 +3,8 @@ title: "LNU Analysis"
 author: "Ashley Grupenhoff"
 date: "5/6/2022"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -11,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "C:/Users/ashle/OneDrive/Documents/R/LNU_chaparral/LNU_chaparral")
 library(tibble)
 library(dplyr)
-library(tidyverse)
+library(tidyr)
 library(ggplot2)
 library(vegan)
 library(plyr)
@@ -73,7 +75,7 @@ sevdata <- ddply(severity.plotdescription.LNU, c("num_burn"),
                  se = sd/sqrt(N)) 
 
 
-ggplot(data=sevdata %>%  filter(num_burn != "7"), aes(x=as.factor(num_burn), y=mean_diam_mm_avg))+
+ggplot(data=sevdata %>%  filter(num_burn != "2"), aes(x=as.factor(num_burn), y=mean_diam_mm_avg))+
                     geom_errorbar(aes(ymin=mean_diam_mm_avg-se, ymax=mean_diam_mm_avg+se), width=.1, size=.7)+
                     geom_line()+
                     geom_point(size=3, aes(colour=factor(num_burn)))+
@@ -168,7 +170,7 @@ library(vegan)
 load(file = "data/clean/LNU_subplot_wide_species.RData")
 
 #make community matrix on which to base ordination
-LNUspecies = LNU_subplot_wide %>% select(-PlotID)
+LNUspecies = LNU_subplot_wide %>% select(!PlotID)
 #columns that contain descriptive data
 LNUplot_ord = LNU_subplot_wide %>% 
   select(PlotID) 
@@ -213,6 +215,9 @@ ggsave(file="figures/NMDS.png", width = 5, height = 3)
 
 ```{r Richness, echo=FALSE}
 #calculate richness
+
+LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
+LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
 #sum up the number of non-zero entries per row 
 #first column ignored ([,-1]) since this is the site name, not species count
 LNU_richness_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_yr_quad,function(x) {
@@ -232,11 +237,9 @@ LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
 str(LNU_richness)
 
 nativeRich <- LNU_richness %>% 
-  filter(native.nonnative == "NATIVE_RICHNESS") %>% 
-  filter(num_burn != "7")
+  filter(native.nonnative == "NATIVE_RICHNESS")
 nonnativeRich <- LNU_richness %>% 
-  filter(native.nonnative == "NONNATIVE_RICHNESS") %>% 
-  filter(num_burn != "7")
+  filter(native.nonnative == "NONNATIVE_RICHNESS")
 
 #write.csv(LNU_richness, "data/clean/LNU_subplot_RICHNESS.csv")
 
@@ -249,11 +252,14 @@ plot(richness ~ num_burn, data=nonnativeRich)
 
 #gaussian based model seems better than gamma 
 n.natRich <- brm(richness ~ num_burn, data = nativeRich,
-                 prior=c(set_prior("normal(0,50)", class= "b")), cores=4)
+                 prior=c(set_prior("normal(0,50)", class= "b")), 
+                 cores=4)
 summary(n.natRich)
 contrasts(nativeRich$num_burn)
 hist(resid(n.natRich))
 pp_check(n.natRich)
+
+emmeans(n.natRich, specs= pairwise ~num_burn)
 
 plot(conditional_effects(n.natRich))
 me <- conditional_effects(n.natRich, "num_burn")
@@ -497,9 +503,9 @@ plot(density_ha ~ as.factor(num_burn), data=shrub_density_long)
 shrub_density_OBLS <- shrub_density_long %>%
   filter(seed.resp == "SEEDLING") %>% 
   filter(fac.obl == "OBL-S") %>% 
-  filter(spp != "ACMGLA") %>% 
-   filter(num_burn != "7") 
+  filter(spp != "ACMGLA") 
 unique(shrub_density_OBLS$spp)
+
 M1 <- zeroinfl(density_ha ~ as.factor(num_burn),
                dist = "negbin",
           data = shrub_density_OBLS)
@@ -535,8 +541,7 @@ shrub_density_FAC <- shrub_density_long %>%
   filter(seed.resp == "SEEDLING") %>% 
   filter(fac.obl == "FAC") %>% 
   filter(spp != "MIMAUR") %>% 
-    filter(spp != "HOLDIS") %>% 
-   filter(num_burn != "7") 
+    filter(spp != "HOLDIS") 
 unique(shrub_density_FAC$spp)
 
 M2 <- zeroinfl(density_ha ~ as.factor(num_burn),
@@ -570,7 +575,114 @@ ggsave(file="figures/fac_seed_predicted.png", width = 4.5, height = 3.5)
 
 
 
+#zero inflated model for ADFA only
+ADFA_density_FAC <- shrub_density_long %>%
+  filter(seed.resp == "SEEDLING") %>% 
+  filter(fac.obl == "FAC") %>% 
+  filter(spp == "ADFA") 
+unique(ADFA_density_FAC$spp)
 
+M2 <- zeroinfl(density_ha ~ as.factor(num_burn),
+               dist = "negbin",
+          data = ADFA_density_FAC)
+summary(M2)
+#check for over/underdispersion
+E3 <- resid(M2, type = "pearson")
+N <- nrow(shrub_density_long)
+p <- length(coef(M2))
+sum(E3^2)/(N-p)
+#.286 nooo 
+
+mydf2 <- ggpredict(M2, type= "zi_random", terms = "num_burn") 
+mydf2
+ggplot(mydf2, aes(as.factor(x), predicted))+
+  geom_point(size=3,position = position_dodge(.1), aes(color=as.factor(x))) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+              position = position_dodge(.1),
+              width=.1, size=.3) +
+  scale_colour_viridis_d()+
+  xlab("Fire frequency")+
+  ylab("ADFA Seedling density/Ha")+
+  theme_bw()+
+  theme(legend.position = "none",
+  axis.text = element_text(size=12),
+  text = element_text(size = 14),
+  panel.grid = element_blank())
+ggsave(file="figures/ADFA_seed_predicted.svg", width = 4.5, height = 3.5)
+ggsave(file="figures/ADFA_seed_predicted.png", width = 4.5, height = 3.5)
+
+
+#zero inflated model for ERCAL only
+ERICAL_density_FAC <- shrub_density_long %>%
+  filter(seed.resp == "SEEDLING") %>% 
+  filter(fac.obl == "FAC") %>% 
+  filter(spp == "ERICAL") 
+unique(ERICAL_density_FAC$spp)
+
+M2 <- zeroinfl(density_ha ~ as.factor(num_burn),
+               dist = "negbin",
+          data = ERICAL_density_FAC)
+summary(M2)
+#check for over/underdispersion
+E3 <- resid(M2, type = "pearson")
+N <- nrow(shrub_density_long)
+p <- length(coef(M2))
+sum(E3^2)/(N-p)
+#.286 nooo 
+
+mydf2 <- ggpredict(M2, type= "zi_random", terms = "num_burn") 
+mydf2
+ggplot(mydf2, aes(as.factor(x), predicted))+
+  geom_point(size=3,position = position_dodge(.1), aes(color=as.factor(x))) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+              position = position_dodge(.1),
+              width=.1, size=.3) +
+  scale_colour_viridis_d()+
+  xlab("Fire frequency")+
+  ylab("ERICAL Seedling density/Ha")+
+  theme_bw()+
+  theme(legend.position = "none",
+  axis.text = element_text(size=12),
+  text = element_text(size = 14),
+  panel.grid = element_blank())
+ggsave(file="figures/ERICAL_seed_predicted.svg", width = 4.5, height = 3.5)
+ggsave(file="figures/ERICAL_seed_predicted.png", width = 4.5, height = 3.5)
+
+#zero inflated model for LEPCAL only
+LEPCAL_density_FAC <- shrub_density_long %>%
+  filter(seed.resp == "SEEDLING") %>% 
+  filter(fac.obl == "FAC") %>% 
+  filter(spp == "LEPCAL") 
+unique(LEPCAL_density_FAC$spp)
+
+M2 <- zeroinfl(density_ha ~ as.factor(num_burn),
+               dist = "negbin",
+          data = LEPCAL_density_FAC)
+summary(M2)
+#check for over/underdispersion
+E3 <- resid(M2, type = "pearson")
+N <- nrow(shrub_density_long)
+p <- length(coef(M2))
+sum(E3^2)/(N-p)
+#.286 nooo 
+
+mydf2 <- ggpredict(M2, type= "zi_random", terms = "num_burn") 
+mydf2
+ggplot(mydf2, aes(as.factor(x), predicted))+
+  geom_point(size=3,position = position_dodge(.1), aes(color=as.factor(x))) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+              position = position_dodge(.1),
+              width=.1, size=.3) +
+  scale_colour_viridis_d()+
+  xlab("Fire frequency")+
+  ylab("LEPCAL Seedling density/Ha")+
+  theme_bw()+
+  theme(legend.position = "none",
+  axis.text = element_text(size=12),
+  text = element_text(size = 14),
+  panel.grid = element_blank())
+ggsave(file="figures/LEPCAL_seed_predicted.svg", width = 4.5, height = 3.5)
+ggsave(file="figures/LEPCAL_seed_predicted.png", width = 4.5, height = 3.5)
 
 
 ```
