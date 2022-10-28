@@ -452,7 +452,7 @@ library(MASS)
 library(lmtest)
 library(pscl)
 library(ggeffects)
-
+library(sjPlot)
 #####DENSITY
 str(shrub_density_long)
 shrub_density_long <- left_join(shrub_density_long, plot.description.short, by="PlotID")
@@ -477,8 +477,7 @@ hist(shrub_density_OBLS$density_ha)
 n.shrubDensityOBL <- brm(data = shrub_density_OBLS,
                       density_ha ~ num_burn,
                        family = zero_inflated_negbinomial(),
-                      prior = c(prior(normal(0, 10), class = Intercept),
-                                prior(beta(2, 2), class = zi)),
+                      prior = c(set_prior('horseshoe(1)')),
                  cores=4,
                  file = "models/shrubDensityOBL")
 
@@ -492,10 +491,13 @@ OBLS.model <- n.shrubDensityOBL%>%
   mutate(density_ha = .value)
 OBLS.model
 
-M1 <- zeroinfl(density_ha ~ as.factor(num_burn),
+M1 <- zeroinfl(density_ha ~ 0 + as.factor(num_burn),
                dist = "negbin",
           data = shrub_density_OBLS)
 summary(M1)
+tab_model(M1)
+tab_model(M1, file = "tables/OBLS_model_output.html")
+
 #check for over/underdispersion
 E2 <- resid(M1, type = "pearson")
 N <- nrow(shrub_density_long)
@@ -503,7 +505,7 @@ p <- length(coef(M1))
 sum(E2^2)/(N-p)
 #.095 looks good
 
-mydf <- ggpredict(M1, type= "zi_random", terms = "num_burn") 
+mydf <- ggpredict(M1, type= "zi_random", terms = c("num_burn"))
 
 ggplot(mydf, aes(as.factor(x), predicted))+
   geom_point(size=3,position = position_dodge(.1), aes(color=as.factor(x))) +
@@ -534,6 +536,8 @@ M2 <- zeroinfl(density_ha ~ as.factor(num_burn),
                dist = "negbin",
           data = shrub_density_FAC)
 summary(M2)
+confint(M2)
+tab_model(M2, file = "tables/FACS_model_output.html")
 #check for over/underdispersion
 E3 <- resid(M2, type = "pearson")
 N <- nrow(shrub_density_long)

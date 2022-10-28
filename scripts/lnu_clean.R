@@ -32,10 +32,10 @@ severity_LNU_byplot <- severity_LNU %>%
 
 plot.description.short <- plot.description_LNU %>% 
   filter(Quad..if.applicable. == "") %>% 
-  select(plotid, num_burn, cool.warm_slope) %>% 
+  dplyr::select(plotid, num_burn, cool.warm_slope) %>% 
   dplyr::rename(PlotID = plotid)
 species.short <- SpeciesList %>% 
-  select(spp, Lifeform, Native_nonnative, fac.obl) 
+  dplyr::select(spp, Lifeform, Native_nonnative, fac.obl) 
 severity.plotdescription.LNU <- left_join(severity_LNU_byplot, plot.description.short, by= "PlotID")
 
 #AVERAGE OF ALL SPECIES
@@ -46,11 +46,11 @@ str(LNU_subplot_wide)
 LNU_subplot_wide <- subplot_species_LNU %>% 
   filter(cover_count_ht == "cover"|
            cover_count_ht == "") %>% 
-  select(PlotID, year, spp ,Q1, Q2, Q3, Q4, Q5)  %>% 
+  dplyr::select(PlotID, year, spp ,Q1, Q2, Q3, Q4, Q5)  %>% 
   mutate(across(c(Q1:Q5), ~ifelse(. == "TR" | . == "tr", "0.05", .))) %>% 
   mutate(across(c(Q1:Q5), ~as.numeric(.))) %>% 
-  mutate(avg_Q = (Q1+Q2+Q3+Q4+Q5)/5) 
-  select(PlotID, spp, avg_Q) %>% 
+  mutate(avg_Q = (Q1+Q2+Q3+Q4+Q5)/5) %>% 
+  dplyr::select(PlotID, spp, avg_Q) %>% 
   pivot_wider(names_from = "spp", values_from = "avg_Q",
               values_fill = 0, values_fn = sum)
 
@@ -65,7 +65,7 @@ LNU_subplot_native <- subplot_species_LNU %>%
   mutate(species_seed.resp = paste(spp, seedling_resp, sep ="_")) %>% 
   mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
   mutate(plot_spp = paste(plot_year, species_seed.resp, by=" ")) %>% 
-  select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
+  dplyr::select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
   mutate_all(na_if,"") %>% 
   mutate_all(~replace_na(., 0)) %>% 
   pivot_longer(!plot_spp, names_to = 'quad', values_to = 'cover') %>% 
