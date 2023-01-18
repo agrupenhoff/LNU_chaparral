@@ -1,56 +1,56 @@
-"","PlotID","num_burn","cool.warm_slope","Mean_diam_cm","mean_diam_mm"
-"1","BOB001",5,"cool",0.2425,2.425
-"2","BOB002",5,"cool",0.22,2.2
-"3","BOB003",5,"cool",0.3075,3.075
-"4","BOB004",5,"warm",0.1975,1.975
-"5","BOB005",5,"warm",0.21,2.1
-"6","BOB006",5,"warm",0.169444444444444,1.69444444444444
-"7","BOB007",3,"cool",0.15,1.5
-"8","BOB008",3,"cool",0.3125,3.125
-"9","BOB009",3,"warm",0.1325,1.325
-"10","BOB010",3,"warm",0.1175,1.175
-"11","BOB011",4,"warm",0.1375,1.375
-"12","BOB012",4,"warm",0.1025,1.025
-"13","BOB013",4,"cool",0.1175,1.175
-"14","BOB014",4,"cool",0.178125,1.78125
-"15","BOB015",4,"cool",0.122222222222222,1.22222222222222
-"16","BOB016",4,"cool",0.1125,1.125
-"17","BOB017",4,"warm",0.11,1.1
-"18","BOB018",3,"warm",0.125,1.25
-"19","BOB019",5,"cool",NA,NA
-"20","CCC001",1,"cool",0.655,6.55
-"21","CCC002",1,"cool",0.28,2.8
-"22","CCC003",1,"warm",2.285,22.85
-"23","CCC004",1,"cool",1.3275,13.275
-"24","CCC005",1,"warm",1.1,11
-"25","CCC006",1,"warm",1.3725,13.725
-"26","CCC007",7,"warm",0.245,2.45
-"27","CCC008",7,"warm",0.3625,3.625
-"28","CCC009",7,"warm",0.2925,2.925
-"29","CCC010",7,"cool",0.3425,3.425
-"30","CCC011",7,"cool",0.315,3.15
-"31","CCC012",7,"cool",0.4,4
-"32","COL007",3,"warm",NA,NA
-"33","COL012",3,"cool",0.271428571428571,2.71428571428571
-"34","COL013",3,"warm",0.34,3.4
-"35","COL014",3,"cool",0.351515151545455,3.51515151545455
-"36","COL017",3,"cool",0.288888888888889,2.88888888888889
-"37","COL018",3,"warm",NA,NA
-"38","QUA001",2,"warm",NA,NA
-"39","QUA002",2,"warm",0.11,1.1
-"40","QUA003",2,"warm",NA,NA
-"41","QUA004",1,"warm",3.75888888893333,37.5888888893333
-"42","QUA005",1,"warm",1.02,10.2
-"43","QUA006",1,"warm",1.305,13.05
-"44","QUA008",1,"warm",0.64125,6.4125
-"45","QUA009",1,"warm",0.46,4.6
-"46","QUA010",2,"cool",NA,NA
-"47","QUA011",1,"warm",NA,NA
-"48","QUA015",1,"cool",0.34,3.4
-"49","QUA016",1,"cool",0.543148148111111,5.43148148111111
-"50","QUA020",1,"cool",0.28,2.8
-"51","QUA021",1,"cool",2.6578125,26.578125
-"52","QUA022",1,"cool",0.7075,7.075
-"53","QUA022",1,"cool",0.7075,7.075
-"54","QUA024",2,"cool",NA,NA
-"55","QUA025",2,"cool",NA,NA
+"","PlotID","Location","num_burn","cool.warm_slope","fire_preLNU_year","currentFRI","medianRefFRI","meanPFRID","meanCC_FRI","PFR","Mean_diam_cm","mean_diam_mm"
+"1","BOB001","Bobcat",5,"cool",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.2425,2.425
+"2","BOB002","Bobcat",5,"cool",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.22,2.2
+"3","BOB003","Bobcat",5,"cool",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.3075,3.075
+"4","BOB004","Bobcat",5,"warm",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.1975,1.975
+"5","BOB005","Bobcat",5,"warm",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.21,2.1
+"6","BOB006","Bobcat",5,"warm",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.169444444444444,1.69444444444444
+"7","BOB007","Bobcat",3,"cool",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.15,1.5
+"8","BOB008","Bobcat",3,"cool",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.3125,3.125
+"9","BOB009","Bobcat",3,"warm",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.1325,1.325
+"10","BOB010","Bobcat",3,"warm",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.1175,1.175
+"11","BOB011","Bobcat",4,"warm",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.1375,1.375
+"12","BOB012","Bobcat",4,"warm",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",0.1025,1.025
+"13","BOB013","Bobcat",4,"cool",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.1175,1.175
+"14","BOB014","Bobcat",4,"cool",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.178125,1.78125
+"15","BOB015","Bobcat",4,"cool",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.122222222222222,1.22222222222222
+"16","BOB016","Bobcat",4,"cool",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.1125,1.125
+"17","BOB017","Bobcat",4,"warm",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.11,1.1
+"18","BOB018","Bobcat",3,"warm",2015,19,59,-65.76,-2,"chaparral and serotinous conifer",0.125,1.25
+"19","BOB019","Bobcat",5,"cool",2015,16,59,-70.65,-3,"chaparral and serotinous conifer",NA,NA
+"20","CCC001","CacheCreek",1,"cool",NA,56,13,48.67,2,"oak woodland",0.655,6.55
+"21","CCC002","CacheCreek",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",0.28,2.8
+"22","CCC003","CacheCreek",1,"warm",NA,56,13,48.67,2,"oak woodland",2.285,22.85
+"23","CCC004","CacheCreek",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",1.3275,13.275
+"24","CCC005","CacheCreek",1,"warm",NA,56,59,2.65,1,"chaparral and serotinous conifer",1.1,11
+"25","CCC006","CacheCreek",1,"warm",NA,56,59,2.65,1,"chaparral and serotinous conifer",1.3725,13.725
+"26","CCC007","CacheCreek",7,"warm",2012,13,59,-77.17,-3,"chaparral and serotinous conifer",0.245,2.45
+"27","CCC008","CacheCreek",7,"warm",2012,13,12,4.42,1,"oak woodland",0.3625,3.625
+"28","CCC009","CacheCreek",7,"warm",2012,11,12,-5.83,-1,"oak woodland",0.2925,2.925
+"29","CCC010","CacheCreek",7,"cool",2012,13,59,-77.17,-3,"chaparral and serotinous conifer",0.3425,3.425
+"30","CCC011","CacheCreek",7,"cool",2012,11,59,-79.45,-3,"chaparral and serotinous conifer",0.315,3.15
+"31","CCC012","CacheCreek",7,"cool",2012,11,59,-79.45,-3,"chaparral and serotinous conifer",0.4,4
+"32","COL007","ColdCanyon",3,"warm",2015,28,59,-48.64,-2,"chaparral and serotinous conifer",0.28,2.8
+"33","COL012","ColdCanyon",3,"cool",2015,28,59,-48.64,-2,"chaparral and serotinous conifer",0.271428571428571,2.71428571428571
+"34","COL013","ColdCanyon",3,"warm",2015,28,59,-48.64,-2,"chaparral and serotinous conifer",0.338888888886667,3.38888888886667
+"35","COL014","ColdCanyon",3,"cool",2015,28,59,-48.64,-2,"chaparral and serotinous conifer",0.351515151518182,3.51515151518182
+"36","COL017","ColdCanyon",3,"cool",2015,28,59,-48.64,-2,"chaparral and serotinous conifer",0.288888888888889,2.88888888888889
+"37","COL018","ColdCanyon",3,"warm",2015,28,59,-48.64,-2,"chaparral and serotinous conifer",0.3075,3.075
+"38","QUA001","QuailRidge",2,"warm",2005,38,59,-31.52,-1,"chaparral and serotinous conifer",NA,NA
+"39","QUA002","QuailRidge",2,"warm",2005,38,59,-31.52,-1,"chaparral and serotinous conifer",0.11,1.1
+"40","QUA003","QuailRidge",2,"warm",2005,38,59,-31.52,-1,"chaparral and serotinous conifer",NA,NA
+"41","QUA004","QuailRidge",1,"warm",NA,56,59,2.65,1,"chaparral and serotinous conifer",3.75722222226667,37.5722222226667
+"42","QUA005","QuailRidge",1,"warm",1988,28,59,-48.64,-2,"chaparral and serotinous conifer",1.02,10.2
+"43","QUA006","QuailRidge",1,"warm",1988,28,59,-48.64,-2,"chaparral and serotinous conifer",1.305,13.05
+"44","QUA008","QuailRidge",1,"warm",NA,56,59,2.65,1,"chaparral and serotinous conifer",0.64125,6.4125
+"45","QUA009","QuailRidge",1,"warm",NA,56,59,2.65,1,"chaparral and serotinous conifer",0.46,4.6
+"46","QUA010","QuailRidge",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",NA,NA
+"47","QUA011","QuailRidge",1,"warm",NA,56,59,2.65,1,"chaparral and serotinous conifer",NA,NA
+"48","QUA015","QuailRidge",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",0.34,3.4
+"49","QUA016","QuailRidge",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",0.543148148111111,5.43148148111111
+"50","QUA020","QuailRidge",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",0.28,2.8
+"51","QUA021","QuailRidge",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",2.6578125,26.578125
+"52","QUA022","QuailRidge",1,"cool",1961,38,59,-31.52,-1,"chaparral and serotinous conifer",0.70583333333,7.0583333333
+"53","QUA022","QuailRidge",1,"cool",1961,38,59,-31.52,-1,"chaparral and serotinous conifer",0.70583333333,7.0583333333
+"54","QUA024","QuailRidge",1,"cool",NA,56,59,2.65,1,"chaparral and serotinous conifer",NA,NA
+"55","QUA025","QuailRidge",2,"cool",2005,38,59,-31.52,-1,"chaparral and serotinous conifer",NA,NA

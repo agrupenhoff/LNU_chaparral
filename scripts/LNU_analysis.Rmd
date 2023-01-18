@@ -23,7 +23,7 @@ library(tidybayes)
 library(bayesplot)
 library(bayestestR)
 library(emmeans)
-library(viridis)
+library(calecopal)
 
 
 #run faster
@@ -41,28 +41,66 @@ plot.description_LNU <- read.csv("data/raw/PlotDescription_LNU.csv")
 severity_LNU <- read.csv("data/raw/Severity_LNU.csv")
 GroundCover_LNU <- read.csv("data/raw/GroundCover_LNU.csv")
 Mortality_LNU <- read.csv("data/raw/Mortality_LNU.csv")
-SpeciesList <- read.csv("data/raw/SpeciesList_LNU.csv")
+SpeciesList <- read.csv("data/raw/SpeciesList_jan23.csv")
 
-plot.description.short <- plot.description_LNU %>% 
-  filter(Quad..if.applicable. == "") %>% 
-  select(Location, plotid, num_burn, cool.warm_slope) %>% 
-  dplyr::rename(PlotID = plotid)
-severity_LNU_byplot <- severity_LNU %>% 
-  group_by(PlotID) %>% 
-  dplyr::summarise(Mean_diam_cm = mean(Mean_diam)) %>% 
-  mutate(mean_diam_mm = Mean_diam_cm *10)
+
+severity.plotdescription.LNU <- read.csv("data/clean/LNU_severity.plotdescription.csv")
+
 species.short <- SpeciesList %>% 
   select(spp, Lifeform, Native_nonnative, fac.obl) 
 
-severity.plotdescription.LNU <- left_join(plot.description.short,severity_LNU_byplot, by= "PlotID")
-severity.plotdescription.LNU$num_burn <- as.numeric(severity.plotdescription.LNU$num_burn)
-#write.csv(severity.plotdescription.LNU,"data/clean/LNU_severity.plotdescription.csv" )
+str(severity.plotdescription.LNU)
+severity.plotdescription.LNU %>% 
+  dplyr::count(num_burn, cool.warm_slope )
 
 severity.plotdescription.LNU %>% 
-  dplyr::count(num_burn, cool.warm_slope)
+  dplyr::count(meanCC_FRI, cool.warm_slope )
 
+ggplot(severity.plotdescription.LNU,
+       aes(x=num_burn, y=meanPFRID, color = PFR))+
+  geom_point()
 
 ```
+
+# extract climate data 
+
+```{r}
+library(tidyverse)
+library(sf)
+library(terra)
+
+# load temp and precip
+ppt = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_ppt_30yr_normal_800mM3_annual_bil/PRISM_ppt_30yr_normal_800mM3_annual_bil.bil")
+tmean = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_tmean_30yr_normal_800mM3_annual_bil/PRISM_tmean_30yr_normal_800mM3_annual_bil.bil")
+
+# load plots
+plots = st_read("data/clean/fuels_spatialData/fuels_spatialData.shp")
+
+# extract ppt and tmean at plots
+plots$ppt = terra::extract(ppt,vect(plots))[,2]
+plots$tmean = terra::extract(tmean,vect(plots))[,2]
+
+
+# trim the data frame to UniquID and cliamte data only
+plots_simple = plots
+st_geometry(plots_simple) = NULL # make it non-spatial (just a data frame)
+plots_simple = plots_simple %>%
+  select(UniquID,ppt,tmean) %>% 
+  dplyr::rename(UniqueID = UniquID)
+
+# write
+write_csv(plots_simple,"data/clean/attributes_climate.csv")
+
+#combine climate data with full attribute data set
+attributes_climate <- read.csv("data/clean/attributes_climate.csv")
+attributes_resolve <- read.csv("data/clean/attributes_resolve_final.csv")
+
+attributes_final_clean <- left_join(attributes_resolve, attributes_climate, by = "UniqueID")
+write.csv(attributes_final_clean, "data/clean/attributes_clean_all.csv", row.names = FALSE)
+
+```
+
+
 
 ## Severity 
 
@@ -108,22 +146,11 @@ plot(m.sev)
 ```
 
 
-# Subplot Native & Nonnative
-
-
-```{r}
-
-LNU_subplot_native <- read.csv("data/clean/LNU_subplot_native_long.csv" )
-LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
-
-LNU_subplot_nonnative <- read.csv("data/clean/LNU_subplot_nonnative_long.csv" )
-LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
-
- 
-
-```
 
 # NMDS
+xxxxxxxxx
+This file is not up to date
+xxxxxxxxxxx
 
 ```{r}
 library(vegan)
@@ -172,13 +199,14 @@ ggsave(file="figures/NMDS.png", width = 5, height = 3)
 
 
 # Richness
-
+Calculated richness by each sub plot probably want to do this by total plot?
 
 ```{r Richness, echo=FALSE}
 #calculate richness
 
 LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
 LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
+
 #sum up the number of non-zero entries per row 
 #first column ignored ([,-1]) since this is the site name, not species count
 LNU_richness_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_yr_quad,function(x) {
@@ -188,58 +216,109 @@ LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
   data.frame(NATIVE_RICHNESS=sum(x[-2]>0.0))})
 
 LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_yr_quad")
+
+LNU_richness <- LNU_richness %>% 
+  mutate_if(is.numeric, ~replace_na(.,0))
+
 LNU_richness <- LNU_richness %>% 
   pivot_longer(!plot_yr_quad,names_to = "native.nonnative",
                values_to = "richness") %>% 
   separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
-LNU_richness <- left_join(LNU_richness, severity.plotdescription.LNU, by="PlotID")
-LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
-str(LNU_richness)
 
+LNU_richness <- left_join(LNU_richness, severity.plotdescription.LNU, by="PlotID")
+
+LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
+LNU_richness$meanCC_FRI <- as.factor(LNU_richness$meanCC_FRI)
+
+str(LNU_richness)
 nativeRich <- LNU_richness %>% 
   filter(native.nonnative == "NATIVE_RICHNESS") %>% 
-  filter(num_burn != "7")
+ filter(Location != "CacheCreek")
 nonnativeRich <- LNU_richness %>% 
-  filter(native.nonnative == "NONNATIVE_RICHNESS")%>% 
-  filter(num_burn != "7")
+  filter(native.nonnative == "NONNATIVE_RICHNESS") %>% 
+  filter(Location != "CacheCreek")
 
-#write.csv(LNU_richness, "data/clean/LNU_subplot_RICHNESS.csv")
+write.csv(LNU_richness, "data/clean/LNU_subplot_RICHNESS.csv")
+
 
 
 ##BAYESIAN
 #repeated measures looking at richness based on different fire frequencies 
-summary(LNU_richness)
-plot(richness ~ num_burn, data=nativeRich)
-plot(richness ~ num_burn, data=nonnativeRich)
+
+ggplot(nativeRich, aes(x=num_burn, y=richness, 
+                       fill= year))+
+  geom_boxplot()
+
+ggplot(nonnativeRich, aes(x=num_burn, y=richness, 
+                       fill= year))+
+  geom_boxplot()
+
+
+
 
 #gaussian based model seems better than gamma 
-n.natRich <- brm(richness ~ num_burn, data = nativeRich,
-                 prior=c(set_prior("normal(0,50)", class= "b")), 
-                 cores=4,
-                 file = "models/nativeRich")
-summary(n.natRich)
-contrasts(nativeRich$num_burn)
-hist(resid(n.natRich))
-pp_check(n.natRich)
+hist(nativeRich$richness)
 
-ems <- emmeans(n.natRich, specs= pairwise ~num_burn)
+
+n.natRich <- brm(richness ~ 1 + num_burn, 
+                 family = negbinomial(),
+                 data = nativeRich,
+                #prior=c(set_prior("cauchy(0,1)", class= "b")), 
+                 cores=4,
+                 file = "models/nativeRich_jan23")
+
+n.natRich2 <- brm(richness ~ num_burn*cool.warm_slope, 
+                  family = negbinomial(),
+                  data = nativeRich,
+                 #prior=c(set_prior("cauchy(0,1)", class= "b")), 
+                 control = list(adapt_delta = 0.998, max_treedepth = 15),
+                  iter = 5000,
+                  warmup = 1000, cores = 4, chains = 4,
+                 file = "models/nativeRich2_jan23")
+
+n.natRich3 <- brm(richness ~ num_burn*cool.warm_slope*year, 
+                  family = negbinomial(),
+                  data = nativeRich,
+                 #prior=c(set_prior("cauchy(0,1)", class= "b")), 
+                 control = list(adapt_delta = 0.998, max_treedepth = 15),
+                  iter = 5000,
+                  warmup = 1000, cores = 4, chains = 4,
+                 file = "models/nativeRich3_jan23")
+
+
+loo(n.natRich, n.natRich2, n.natRich3)
+summary(n.natRich2)
+contrasts(nativeRich$num_burn)
+hist(resid(n.natRich2))
+pp_check(n.natRich2)
+bayes_R2(n.natRich2)
+
+
+
+ems <- emmeans(n.natRich3, specs= pairwise ~num_burn)
 summary(pairs(ems), point.est = mean)
 
-plot(conditional_effects(n.natRich))
-native.rich.model <- n.natRich %>% 
-  emmeans( ~num_burn) %>% 
+plot(conditional_effects(n.natRich2))
+
+  
+
+native.rich.model <- n.natRich3 %>% 
+  emmeans( ~num_burn * cool.warm_slope * year) %>% 
   gather_emmeans_draws() %>% 
-  mutate(native_richness = .value)
+  mutate(native_richness = .value)%>% 
+  select(-.chain, -.iteration, -.value) 
 native.rich.model
 
 #now plot!!
 native_rich_plot <- ggplot(data = native.rich.model,
-                           aes(x = num_burn, y=native_richness, fill = native_richness))+
-  stat_halfeye()+
+                           aes(x = num_burn, y=native_richness, 
+                               color = cool.warm_slope))+
+  stat_pointinterval(position = position_dodge(width = .4),
+                     .width = c(.95))+
   labs(x = expression(italic("Fire Frequency")),
        y = "Native Richness") +
-  scale_fill_viridis(discrete = TRUE)+
+  scale_color_manual(values = cal_palette("gayophytum")) +
   theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 13),
@@ -249,31 +328,52 @@ native_rich_plot
 
 #gaussian based model seems better than gamma 
 n.nonnatRich <- brm(richness ~ num_burn, data = nonnativeRich,
-                 prior=c(set_prior("normal(0,50)", class= "b")), 
-                 cores=4,
-                 file = "nonnativeRich")
-summary(n.nonnatRich)
+                 prior=c(set_prior("normal(0,10)", class= "b")), 
+                 control = list(adapt_delta = 0.998, max_treedepth = 15),
+                  iter = 5000,
+                  warmup = 1000, cores = 4, chains = 4,
+                 file = "models/nonnativeRich_jan23")
+
+n.nonnatRich2 <- brm(richness ~ num_burn*cool.warm_slope, 
+                  data = nonnativeRich,
+                 prior=c(set_prior("normal(0,10)", class= "b")), 
+                 control = list(adapt_delta = 0.998, max_treedepth = 15),
+                  iter = 5000,
+                  warmup = 1000, cores = 4, chains = 4,
+                 file = "models/nonnativeRich2_jan23")
+
+n.nonnatRich3 <- brm(richness ~ num_burn*cool.warm_slope*year, 
+                  data = nonnativeRich,
+                 prior=c(set_prior("normal(0,10)", class= "b")), 
+                 control = list(adapt_delta = 0.998, max_treedepth = 15),
+                  iter = 5000,
+                  warmup = 1000, cores = 4, chains = 4,
+                 file = "models/nonnativeRich3_jan23")
+loo(n.nonnatRich, n.nonnatRich2, n.nonnatRich3)
+summary(n.nonnatRich2)
 contrasts(nonnativeRich$num_burn)
 hist(resid(n.nonnatRich))
 pp_check(n.nonnatRich)
 
-plot(conditional_effects(n.nonnatRich))
+plot(conditional_effects(n.nonnatRich3))
 
 emmeans(n.nonnatRich, specs= pairwise ~num_burn)
 
-nonnative.rich.model <- n.nonnatRich %>% 
-  emmeans( ~num_burn) %>% 
+nonnative.rich.model <- n.nonnatRich3 %>% 
+  emmeans( ~num_burn* cool.warm_slope*year) %>% 
   gather_emmeans_draws() %>% 
   mutate(nonnative_richness = .value)
 nonnative.rich.model
 
 #now plot!!
 nonnative_rich_plot <- ggplot(data = nonnative.rich.model,
-                           aes(x = num_burn, y=nonnative_richness, fill = nonnative_richness))+
-  stat_halfeye()+
+                           aes(x = num_burn, y=nonnative_richness, 
+                              color = cool.warm_slope))+
+  stat_pointinterval(position = position_dodge(width = .4),
+                     .width = c(.95))+
   labs(x = expression(italic("Fire Frequency")),
        y = "Nonnative Richness") +
-  scale_fill_viridis(discrete = TRUE)+
+ scale_color_manual(values = cal_palette("gayophytum")) +
   theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 13),
@@ -287,9 +387,8 @@ nonnative_rich_plot
 
 # Shannon Diversity
 
+This data is overdispersed (mean < variance) and has a long tail. Need to figure out another distribution. Negative binomial doesn't work since not integer data.
 ```{r Shannon}
-
-library(sjPlot)
 
 ######SHANNON DIVERSITY
 #sum up the number of non-zero entries per row 
@@ -301,6 +400,10 @@ LNU_shan_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
   data.frame(NATIVE_shanDiv=diversity(x[-2], index="shannon"))})
 
 LNU_shanDiv <- left_join(LNU_shan_native, LNU_shan_nonnative, by="plot_yr_quad")
+
+LNU_shanDiv <- LNU_shanDiv %>% 
+  mutate_if(is.numeric, ~replace_na(.,0))
+
 LNU_shanDiv <- LNU_shanDiv %>% 
   pivot_longer(!plot_yr_quad,names_to = "native.nonnative",
                values_to = "shanDiv") %>% 
@@ -308,28 +411,33 @@ LNU_shanDiv <- LNU_shanDiv %>%
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
 LNU_shanDiv <- left_join(LNU_shanDiv,severity.plotdescription.LNU, by="PlotID")
+
 LNU_shanDiv$num_burn <- as.factor(LNU_shanDiv$num_burn)
 str(LNU_shanDiv)
+
 nativeShan <- LNU_shanDiv %>% 
   filter(native.nonnative == "NATIVE_shanDiv") %>% 
-  filter(num_burn != "7")
+  filter(Location != "CacheCreek")
 nonnativeShan <- LNU_shanDiv %>% 
   filter(native.nonnative == "NONNATIVE_shanDiv") %>% 
-  filter(num_burn != "7")
+  filter(Location != "CacheCreek")
 
-#write.csv(LNU_shanDiv, "data/clean/LNU_subplot_shanDiv.csv")
+write.csv(LNU_shanDiv, "data/clean/LNU_subplot_shanDiv.csv")
 
 
 #Bayesian model
 
-plot(shanDiv ~ num_burn, data=nativeShan)
-plot(shanDiv ~ num_burn, data=nonnativeShan)
+
 
 
 #gaussian based model seems better than gamma 
 str(nativeShan)
 hist(nativeShan$shanDiv)
+mean(nativeShan$shanDiv)
+sd(nativeShan$shanDiv)
+
 n.natShan <- brm(shanDiv ~ num_burn, 
+                 family = negbinomial(),
                  data = nativeShan,
                  prior=c(set_prior("normal(0,2)", class= "b")), 
                  cores=4,

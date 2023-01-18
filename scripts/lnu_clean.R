@@ -13,7 +13,7 @@ plot.description_LNU <- read.csv("data/raw/PlotDescription_LNU.csv")
 severity_LNU <- read.csv("data/raw/Severity_LNU.csv")
 GroundCover_LNU <- read.csv("data/raw/GroundCover_LNU.csv")
 Mortality_LNU <- read.csv("data/raw/Mortality_LNU.csv")
-SpeciesList <- read.csv("data/raw/SpeciesList_LNU.csv")
+SpeciesList <- read.csv("data/raw/SpeciesList_jan23.csv")
 
 str(subplot_species_LNU)
 subplot_species_LNU$Q1 = as.numeric(subplot_species_LNU$Q1)
@@ -23,40 +23,35 @@ subplot_species_LNU$Q4 = as.numeric(subplot_species_LNU$Q4)
 subplot_species_LNU$Q5 = as.numeric(subplot_species_LNU$Q5)
 
 #SEVERITY DATA
-
 severity_LNU_byplot <- severity_LNU %>% 
   group_by(PlotID) %>% 
   dplyr::summarise(Mean_diam_cm = mean(Mean_diam)) %>% 
   mutate(mean_diam_mm = Mean_diam_cm *10)
 
-
+str(plot.description_LNU)
 plot.description.short <- plot.description_LNU %>% 
   filter(Quad..if.applicable. == "") %>% 
-  dplyr::select(plotid, num_burn, cool.warm_slope) %>% 
-  dplyr::rename(PlotID = plotid)
+  dplyr::select(PlotID, Location, num_burn, cool.warm_slope,
+                fire_preLNU_year, currentFRI, medianRefFRI, meanPFRID,
+                meanCC_FRI, PFR) 
+
+severity.plotdescription.LNU <- left_join(plot.description.short,severity_LNU_byplot, by= "PlotID")
+
+write.csv(plot.description.short, "data/clean/PlotDescription_clean.csv")
+write.csv(severity.plotdescription.LNU,"data/clean/LNU_severity.plotdescription.csv" )
+
+
 species.short <- SpeciesList %>% 
   dplyr::select(spp, Lifeform, Native_nonnative, fac.obl) 
-severity.plotdescription.LNU <- left_join(severity_LNU_byplot, plot.description.short, by= "PlotID")
 
-#AVERAGE OF ALL SPECIES
+
+#add species descriptions to data
+subplot_species_LNU <- left_join(subplot_species_LNU, species.short,
+                                 by = "spp")
+
+
+
 str(subplot_species_LNU)
-str(LNU_subplot_wide)
-
-#pivot wider & add zeros to species not found in entire plot 
-LNU_subplot_wide <- subplot_species_LNU %>% 
-  filter(cover_count_ht == "cover"|
-           cover_count_ht == "") %>% 
-  dplyr::select(PlotID, year, spp ,Q1, Q2, Q3, Q4, Q5)  %>% 
-  mutate(across(c(Q1:Q5), ~ifelse(. == "TR" | . == "tr", "0.05", .))) %>% 
-  mutate(across(c(Q1:Q5), ~as.numeric(.))) %>% 
-  mutate(avg_Q = (Q1+Q2+Q3+Q4+Q5)/5) %>% 
-  dplyr::select(PlotID, spp, avg_Q) %>% 
-  pivot_wider(names_from = "spp", values_from = "avg_Q",
-              values_fill = 0, values_fn = sum)
-
-
-
-
 #NATIVE SPECIES
 LNU_subplot_native <- subplot_species_LNU %>% 
   filter(cover_count_ht == "cover"|
@@ -65,9 +60,8 @@ LNU_subplot_native <- subplot_species_LNU %>%
   mutate(species_seed.resp = paste(spp, seedling_resp, sep ="_")) %>% 
   mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
   mutate(plot_spp = paste(plot_year, species_seed.resp, by=" ")) %>% 
-  dplyr::select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
-  mutate_all(na_if,"") %>% 
-  mutate_all(~replace_na(., 0)) %>% 
+  dplyr::select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
+  mutate_if(is.numeric, ~replace_na(., 0) ) %>% 
   pivot_longer(!plot_spp, names_to = 'quad', values_to = 'cover') %>% 
   separate(plot_spp, c("plot_year", "spp"), sep=" ") 
 
@@ -97,8 +91,7 @@ LNU_subplot_nonnative <- subplot_species_LNU %>%
   mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
   mutate(plot_spp = paste(plot_year, species_seed.resp, by=" ")) %>% 
   select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
-  mutate_all(na_if,"") %>% 
-  mutate_all(~replace_na(., 0)) %>% 
+  mutate_if(is.numeric, ~replace_na(., 0)) %>% 
   pivot_longer(!plot_spp, names_to = 'quad', values_to = 'cover') %>% 
   separate(plot_spp, c("plot_year", "spp"), sep=" ") 
 
@@ -128,9 +121,9 @@ shrub_density_long <- subplot_species_LNU %>%
   mutate(plot_spp = paste(plot_year, species_seed.resp, by=" ")) %>% 
   select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
   mutate_if(is.numeric, ~replace_na(., 0)) %>% 
-  mutate(avg_count = (Q1+Q2+Q3+Q4+Q5)/5) %>% 
-  mutate(count_ha = avg_count/0.0001) %>% 
-  select(plot_spp, count_ha) %>% 
+  mutate(avg_count = (Q1+Q2+Q3+Q4+Q5)/5,
+         sum_count = Q1+Q2+Q3+Q4+Q5) %>% 
+  select(plot_spp, avg_count, sum_count) %>% 
   separate(plot_spp, c("plot_year", "spp.seed.resp"), sep=" ") 
 
 str(shrub_density_long)
@@ -139,18 +132,12 @@ str(shrub_density_long)
 shrub_density_wide <- shrub_density_long %>% 
   pivot_wider(
     names_from = "spp.seed.resp",
-    values_from = "count_ha",
+    values_from = "avg_count",
     values_fill = 0,
     values_fn = sum
   )  
 str(shrub_density_wide)
 
-shrub_density_long <- shrub_density_wide %>% 
-  pivot_longer(!plot_year,
-               names_to = "spp", 
-               values_to = "density_ha") %>% 
-  separate(plot_year, c("PlotID","year"),sep="_") %>% 
-  separate(spp, c("spp","seed.resp"),sep="_")
 
 write.csv(shrub_density_wide, "data/clean/LNU_subplot_shrub_density_wide.csv")
 write.csv(shrub_density_long, "data/clean/LNU_subplot_shrub_density_long.csv")
@@ -161,16 +148,12 @@ shrub_cover_long <- subplot_species_LNU %>%
   mutate(species_seed.resp = paste(spp, seedling_resp, sep ="_")) %>% 
   mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
   mutate(plot_spp = paste(plot_year, species_seed.resp, by=" ")) %>% 
-  select(plot_spp, Q1, Q2, Q3, Q4, Q5)  %>% 
-  mutate_all(na_if,"") %>% 
-  mutate_all(~replace_na(., 0)) %>% 
+  select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
+  mutate_if(is.numeric, ~replace_na(., 0)) %>% 
   pivot_longer(!plot_spp, names_to = 'quad', values_to = 'cover') %>% 
   separate(plot_spp, c("plot_year", "spp.seed.resp"), sep=" ") 
 
 str(shrub_cover_long)
-shrub_cover_long$cover[shrub_cover_long$cover == "tr"] <- "0.05"
-shrub_cover_long$cover[shrub_cover_long$cover == "TR"] <- "0.05"
-shrub_cover_long$cover <- as.numeric(shrub_cover_long$cover)
 
 shrub_cover_plot <- shrub_cover_long %>% 
   group_by(plot_year, spp.seed.resp) %>% 
@@ -181,6 +164,42 @@ shrub_cover_plot <- shrub_cover_long %>%
 write.csv(shrub_cover_plot, "data/clean/LNU_subplot_shrub_cover.csv")
     
 
+#Total number of species
+TOT_species_LNU <- TOT_species_LNU %>% 
+  dplyr::rename(spp = Species) %>% 
+  distinct(PlotID, year, spp)
 
-    
+TOT_species_LNU <- left_join(TOT_species_LNU, species.short,
+                                 by = "spp")
+
+#Total nonnative species
+TOT_nonnative <- TOT_species_LNU %>% 
+  filter(Native_nonnative == "non-native"|
+           Native_nonnative == "invasive non-native") %>% 
+  mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
+  select(plot_year, spp) 
+
+TOT_nonnative_sum <- TOT_nonnative %>% 
+  group_by(plot_year) %>% 
+  tally() %>% 
+  dplyr::rename(nonnative_rich = n)
+
+#Total native species
+TOT_native <- TOT_species_LNU %>% 
+  filter(Native_nonnative == "native") %>% 
+  mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
+  select(plot_year, spp) 
+
+TOT_native_sum <- TOT_native %>% 
+  group_by(plot_year) %>% 
+  tally() %>% 
+  dplyr::rename(native_rich = n)
+
+TOT_richness <- left_join(TOT_native_sum, TOT_nonnative_sum, by = "plot_year")
+
+TOT_richness <- TOT_richness %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+write_csv(TOT_richness, "data/clean/LNU_Total_RICHNESS.csv")
+
     
