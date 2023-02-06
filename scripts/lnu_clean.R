@@ -121,26 +121,30 @@ shrub_density_long <- subplot_species_LNU %>%
   mutate(plot_spp = paste(plot_year, species_seed.resp, by=" ")) %>% 
   select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
   mutate_if(is.numeric, ~replace_na(., 0)) %>% 
-  mutate(avg_count = (Q1+Q2+Q3+Q4+Q5)/5,
-         sum_count = Q1+Q2+Q3+Q4+Q5) %>% 
-  select(plot_spp, avg_count, sum_count) %>% 
+  mutate(avg.count = (Q1+Q2+Q3+Q4+Q5)/5,
+         sum.count = Q1+Q2+Q3+Q4+Q5) %>% 
+  select(plot_spp, avg.count, sum.count) %>% 
   separate(plot_spp, c("plot_year", "spp.seed.resp"), sep=" ") 
-
-str(shrub_density_long)
-
 
 shrub_density_wide <- shrub_density_long %>% 
   pivot_wider(
     names_from = "spp.seed.resp",
-    values_from = "avg_count",
+    values_from = c("avg.count", "sum.count"),
     values_fill = 0,
     values_fn = sum
   )  
 str(shrub_density_wide)
 
+shrub_density_long_final <- shrub_density_wide %>% 
+  pivot_longer(!plot_year, 
+               names_to = 'spp.seed.resp',
+               values_to = 'density') %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") %>% 
+  separate(spp.seed.resp, c("avg.sum", "spp", "seed.resp"), sep="_") 
+
 
 write.csv(shrub_density_wide, "data/clean/LNU_subplot_shrub_density_wide.csv")
-write.csv(shrub_density_long, "data/clean/LNU_subplot_shrub_density_long.csv")
+write.csv(shrub_density_long_final, "data/clean/LNU_subplot_shrub_density_long.csv")
 
 #SHRUB COVER
 shrub_cover_long <- subplot_species_LNU %>% 

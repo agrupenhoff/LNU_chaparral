@@ -1,0 +1,56 @@
+Site,PlotID,nm_prr_,Burned_,X_1,notes,fr_prLNU_n,fr_prLNU_y,crrnFRI,mdnRFRI,mnPFRID,mCC_FRI,PFR,NOTES_1,ppt,tmean
+Bobcat,BOB001,5,Yes,10S,cool,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,736.6400146484375,15.830000877380371
+Bobcat,BOB002,5,Yes,10S,cool,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,736.6400146484375,15.830000877380371
+Bobcat,BOB003,5,Yes,10S,cool,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,736.6400146484375,15.830000877380371
+Bobcat,BOB004,5,Yes,10S,warm,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,736.6400146484375,15.830000877380371
+Bobcat,BOB005,5,Yes,10S,warm,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,736.6400146484375,15.830000877380371
+Bobcat,BOB006,5,Yes,10S,warm,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,710.24005126953125,16.73000144958496
+Bobcat,BOB007,3,Yes,10S,cool slope,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,736.6400146484375,15.830000877380371
+Bobcat,BOB008,3,Yes,10S,cool slope,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,736.6400146484375,15.830000877380371
+Bobcat,BOB009,3,Yes,10S,warm slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB010,3,Yes,10S,warm slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB011,4,Yes,10S,warm slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB012,4,Yes,10S,warm slope,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB013,4,Yes,10S,cool slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB014,4,Yes,10S,cool slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB015,4,Yes,10S,cool slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB016,4,Yes,10S,cool slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB017,4,Yes,10S,warm slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB018,3,Yes,10S,warm slope,cold,2015,19,59,-65.76,-2,chaparral and serotinous conifer,NA,768.092041015625,15.980000495910645
+Bobcat,BOB019,5,Yes,10S,cool slope,cold,2015,16,59,-70.65,-3,chaparral and serotinous conifer,NA,710.24005126953125,16.73000144958496
+CacheCreek,CCC001,1,Yes,10S,cool slope,NA,NA,56,13,48.67,2,oak woodland,NA,667.35003662109375,16.21000099182129
+CacheCreek,CCC002,1,Yes,10S,cool slope,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,699.52105712890625,16.55000114440918
+CacheCreek,CCC003,1,Yes,10S,warm slope,NA,NA,56,13,48.67,2,oak woodland,NA,684.7080078125,16.32000160217285
+CacheCreek,CCC004,1,Yes,10S,cool slope,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,699.52105712890625,16.55000114440918
+CacheCreek,CCC005,1,Yes,10S,warm slope,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,699.52105712890625,16.55000114440918
+CacheCreek,CCC006,1,Yes,10S,warm slope,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,699.52105712890625,16.55000114440918
+CacheCreek,CCC007,7,Yes,10S,warm slope,sixteen_complex,2012,13,59,-77.17,-3,chaparral and serotinous conifer,NA,626.38702392578125,16.040000915527344
+CacheCreek,CCC008,7,yes,10S,warm slope,sixteen_complex,2012,13,12,4.42,1,oak woodland,NA,626.38702392578125,16.040000915527344
+CacheCreek,CCC009,7,yes,10S,warm slope,sixteen_complex,2012,11,12,-5.83,-1,oak woodland,NA,626.38702392578125,16.040000915527344
+CacheCreek,CCC010,7,yes,10S,cool slope,sixteen_complex,2012,13,59,-77.17,-3,chaparral and serotinous conifer,NA,626.38702392578125,16.040000915527344
+CacheCreek,CCC011,7,yes,10S,cool slope,sixteen_complex,2012,11,59,-79.45,-3,chaparral and serotinous conifer,NA,626.38702392578125,16.040000915527344
+CacheCreek,CCC012,7,yes,10S,cool slope,sixteen_complex,2012,11,59,-79.45,-3,chaparral and serotinous conifer,NA,626.38702392578125,16.040000915527344
+ColdCanyon,COL007,3,Yes,10S,NA,wragg,2015,28,59,-48.64,-2,chaparral and serotinous conifer,NA,714.19305419921875,16.5
+ColdCanyon,COL012,3,Yes,10S,NA,wragg,2015,28,59,-48.64,-2,chaparral and serotinous conifer,NA,714.19305419921875,16.5
+ColdCanyon,COL013,3,Yes,10S,NA,wragg,2015,28,59,-48.64,-2,chaparral and serotinous conifer,NA,714.19305419921875,16.5
+ColdCanyon,COL014,3,Yes,10S,NA,wragg,2015,28,59,-48.64,-2,chaparral and serotinous conifer,NA,714.19305419921875,16.5
+ColdCanyon,COL017,3,Yes,10S,NA,wragg,2015,28,59,-48.64,-2,chaparral and serotinous conifer,NA,714.19305419921875,16.5
+ColdCanyon,COL018,3,Yes,10S,NA,wragg,2015,28,59,-48.64,-2,chaparral and serotinous conifer,NA,714.19305419921875,16.5
+QuailRidge,QUA001,2,Yes,10S,NA,pleasure,2005,38,59,-31.52,-1,chaparral and serotinous conifer,NA,703.89703369140625,16.34000015258789
+QuailRidge,QUA002,2,Yes,10S,NA,pleasure,2005,38,59,-31.52,-1,chaparral and serotinous conifer,NA,703.89703369140625,16.34000015258789
+QuailRidge,QUA003,2,Yes,10S,NA,pleasure,2005,38,59,-31.52,-1,chaparral and serotinous conifer,NA,706.34002685546875,16
+QuailRidge,QUA004,1,Yes,10S,NA,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,713.00604248046875,16.700000762939453
+ColdCanyon,QUA005,1,Yes,10S,NA,resort,1988,28,59,-48.64,-2,chaparral and serotinous conifer,NA,718.79705810546875,16.30900001525879
+QuailRidge,QUA006,1,Yes,10S,NA,resort,1988,28,59,-48.64,-2,chaparral and serotinous conifer,NA,718.79705810546875,16.30900001525879
+QuailRidge,QUA008,1,Yes,10S,NA,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,706.34002685546875,16
+QuailRidge,QUA009,1,Yes,10S,NA,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,706.34002685546875,16
+QuailRidge,QUA010,2,Yes,10S,NA,pleasure,2005,38,59,-31.52,-1,chaparral and serotinous conifer,NA,706.34002685546875,16
+QuailRidge,QUA011,1,Yes,10S,NA,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,710.71002197265625,16.110000610351562
+QuailRidge,QUA015,1,Yes,10S,NA,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,697.36700439453125,16.510000228881836
+QuailRidge,QUA016,1,Yes,10S,NA,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,697.36700439453125,16.510000228881836
+QuailRidge,QUA020,1,Yes,10S,north slope,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,699.738037109375,16.690000534057617
+QuailRidge,QUA021,1,Yes,10S,Yes north,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,699.738037109375,16.690000534057617
+QuailRidge,QUA022,1,Yes,10S,Yes north,R.COOMBA,1961,38,59,-31.52,-1,chaparral and serotinous conifer,NA,699.738037109375,16.690000534057617
+QuailRidge,QUA023,2,Yes,10S,Yes north,pleasure,2005,38,59,-31.52,-1,chaparral and serotinous conifer,NA,701.0570068359375,16.73000144958496
+QuailRidge,QUA024,2,Yes,10S,Yes north,NA,NA,56,59,2.65,1,chaparral and serotinous conifer,NA,706.34002685546875,16
+QuailRidge,QUA025,2,Yes,10S,North slope,pleasure,2005,38,59,-31.52,-1,chaparral and serotinous conifer,NA,710.71002197265625,16.110000610351562

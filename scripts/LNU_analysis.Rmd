@@ -24,7 +24,7 @@ library(bayesplot)
 library(bayestestR)
 library(emmeans)
 library(calecopal)
-
+library(car) #use VIF
 
 #run faster
 rstan_options(auto_write = TRUE)
@@ -37,69 +37,23 @@ options(mc.cores = parallel::detectCores())
 #raw
 TOT_species_LNU <- read.csv("data/raw/TOT_species_LNU.csv")
 subplot_species_LNU <- read.csv("data/raw/SubPlot_SPP_LNU.csv")
-plot.description_LNU <- read.csv("data/raw/PlotDescription_LNU.csv")
+plot.description_LNU <- read.csv("data/clean/LNU_plot_description_CLEAN.csv")
 severity_LNU <- read.csv("data/raw/Severity_LNU.csv")
 GroundCover_LNU <- read.csv("data/raw/GroundCover_LNU.csv")
 Mortality_LNU <- read.csv("data/raw/Mortality_LNU.csv")
 SpeciesList <- read.csv("data/raw/SpeciesList_jan23.csv")
 
 
-severity.plotdescription.LNU <- read.csv("data/clean/LNU_severity.plotdescription.csv")
 
 species.short <- SpeciesList %>% 
-  select(spp, Lifeform, Native_nonnative, fac.obl) 
+  dplyr::select(spp, Lifeform, Native_nonnative, fac.obl) 
 
-str(severity.plotdescription.LNU)
-severity.plotdescription.LNU %>% 
-  dplyr::count(num_burn, cool.warm_slope )
 
-severity.plotdescription.LNU %>% 
-  dplyr::count(meanCC_FRI, cool.warm_slope )
-
-ggplot(severity.plotdescription.LNU,
-       aes(x=num_burn, y=meanPFRID, color = PFR))+
+ggplot(plot.description_LNU,
+       aes(x=num_burn, y=hli))+
   geom_point()
 
 ```
-
-# extract climate data 
-
-```{r}
-library(tidyverse)
-library(sf)
-library(terra)
-
-# load temp and precip
-ppt = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_ppt_30yr_normal_800mM3_annual_bil/PRISM_ppt_30yr_normal_800mM3_annual_bil.bil")
-tmean = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_tmean_30yr_normal_800mM3_annual_bil/PRISM_tmean_30yr_normal_800mM3_annual_bil.bil")
-
-# load plots
-plots = st_read("data/clean/fuels_spatialData/fuels_spatialData.shp")
-
-# extract ppt and tmean at plots
-plots$ppt = terra::extract(ppt,vect(plots))[,2]
-plots$tmean = terra::extract(tmean,vect(plots))[,2]
-
-
-# trim the data frame to UniquID and cliamte data only
-plots_simple = plots
-st_geometry(plots_simple) = NULL # make it non-spatial (just a data frame)
-plots_simple = plots_simple %>%
-  select(UniquID,ppt,tmean) %>% 
-  dplyr::rename(UniqueID = UniquID)
-
-# write
-write_csv(plots_simple,"data/clean/attributes_climate.csv")
-
-#combine climate data with full attribute data set
-attributes_climate <- read.csv("data/clean/attributes_climate.csv")
-attributes_resolve <- read.csv("data/clean/attributes_resolve_final.csv")
-
-attributes_final_clean <- left_join(attributes_resolve, attributes_climate, by = "UniqueID")
-write.csv(attributes_final_clean, "data/clean/attributes_clean_all.csv", row.names = FALSE)
-
-```
-
 
 
 ## Severity 
@@ -198,7 +152,8 @@ ggsave(file="figures/NMDS.png", width = 5, height = 3)
 
 
 
-# Richness
+# Richness clean
+
 Calculated richness by each sub plot probably want to do this by total plot?
 
 ```{r Richness, echo=FALSE}
@@ -217,173 +172,200 @@ LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
 
 LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_yr_quad")
 
-LNU_richness <- LNU_richness %>% 
-  mutate_if(is.numeric, ~replace_na(.,0))
-
-LNU_richness <- LNU_richness %>% 
-  pivot_longer(!plot_yr_quad,names_to = "native.nonnative",
-               values_to = "richness") %>% 
+LNU_richness_proportion <- LNU_richness %>% 
+  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
+  mutate(prop.native = (NATIVE_RICHNESS/(NATIVE_RICHNESS + NONNATIVE_RICHNESS))) %>% 
   separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
+  group_by(plot_year) %>% 
+  dplyr::summarise(mean_native_rich = mean(NATIVE_RICHNESS),
+            mean_nonnative_rich = mean(NONNATIVE_RICHNESS),
+            mean_propNative = mean(prop.native))
+  
+
+LNU_richness_final <- LNU_richness_proportion %>% 
+  pivot_longer(!plot_year,
+               names_to = "native.nonnative.prop",
+               values_to = "richness") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
-LNU_richness <- left_join(LNU_richness, severity.plotdescription.LNU, by="PlotID")
+LNU_richness_final <- left_join(LNU_richness_final, plot.description_LNU, by="PlotID")
 
-LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
-LNU_richness$meanCC_FRI <- as.factor(LNU_richness$meanCC_FRI)
+
+write_csv(LNU_richness_final, "data/clean/LNU_subplot_RICHNESS.csv")
+            
+```
+
+# model richness random forest
+
+```{r RF RICH}
+LNU_richness <- read.csv("data/clean/LNU_subplot_RICHNESS.csv")
 
 str(LNU_richness)
+LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
+LNU_richness$TSLF <- as.factor(LNU_richness$TSLF)
+LNU_richness$mCC_FRI <- as.factor(LNU_richness$mCC_FRI)
+LNU_richness$aspect_name <- as.factor(LNU_richness$aspect_name)
+LNU_richness$year <- as.factor(LNU_richness$year)
+LNU_richness$elevation <- as.numeric(LNU_richness$elevation)
+
+propnativeRich <- LNU_richness %>% 
+  filter(native.nonnative.prop == "mean_propNative")  %>% 
+  filter(PFR != "oak woodland")
+propnativeRich_small <- propnativeRich %>% 
+  dplyr::select(richness, year, num_burn, mCC_FRI, TSLF,
+         ppt, tmean, elevation, slope, aspect_name, hli)
+
+rich_mod <- bf(richness ~ num_burn + cover)
+cover_mod <- bf(cover ~ firesev)
+
+k_fit_brms <- brm(rich_mod +
+                  cover_mod + 
+                  set_rescor(FALSE), 
+                data=keeley,
+                cores=4, chains = 2)
+
+```
+
+# model richness regression 
+
+```{r regression RICH}
+
+
+LNU_richness <- read.csv("data/clean/LNU_subplot_RICHNESS.csv")
+
+str(LNU_richness)
+LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
+LNU_richness$TSLF <- as.factor(LNU_richness$TSLF)
+LNU_richness$mCC_FRI <- as.factor(LNU_richness$mCC_FRI)
+LNU_richness$aspect_name <- as.factor(LNU_richness$aspect_name)
+LNU_richness$year <- as.factor(LNU_richness$year)
+LNU_richness$elevation <- as.numeric(LNU_richness$elevation)
+LNU_richness$crrnFRI <- as.factor(LNU_richness$crrnFRI)
+
+
+
+str(LNU_richness)
+unique(LNU_richness$native.nonnative.prop)
+
 nativeRich <- LNU_richness %>% 
-  filter(native.nonnative == "NATIVE_RICHNESS") %>% 
- filter(Location != "CacheCreek")
+  filter(native.nonnative.prop == "mean_native_rich") %>% 
+ filter(PFR != "oak woodland")
 nonnativeRich <- LNU_richness %>% 
-  filter(native.nonnative == "NONNATIVE_RICHNESS") %>% 
-  filter(Location != "CacheCreek")
-
-write.csv(LNU_richness, "data/clean/LNU_subplot_RICHNESS.csv")
-
-
+  filter(native.nonnative.prop == "mean_nonnative_rich")  %>% 
+  filter(PFR != "oak woodland")
+propnativeRich <- LNU_richness %>% 
+  filter(native.nonnative.prop == "mean_propNative")  %>% 
+  filter(PFR != "oak woodland") %>% 
+  dplyr::rename(prop_native_rich = richness)
 
 ##BAYESIAN
 #repeated measures looking at richness based on different fire frequencies 
 
-ggplot(nativeRich, aes(x=num_burn, y=richness, 
-                       fill= year))+
+ggplot(propnativeRich, aes(x=num_burn, y=prop_native_rich,
+                           fill = year))+
   geom_boxplot()
 
-ggplot(nonnativeRich, aes(x=num_burn, y=richness, 
-                       fill= year))+
-  geom_boxplot()
+propnativeRich_small <- propnativeRich %>% 
+  dplyr::select(prop_native_rich, year, num_burn, mCC_FRI, TSLF,
+         ppt, tmean, elevation, slope, aspect_name, hli) %>% 
+  #can't have exactly 0 or 1
+  mutate(prop_native_rich = ifelse(prop_native_rich == 1, 0.999, prop_native_rich))
+
+range(propnativeRich_small$prop_native_rich)
+#check if covariates are correlated
+hist(propnativeRich$prop_native_rich)
+plot(propnativeRich$ppt, propnativeRich$tmean)
+plot(propnativeRich$ppt, propnativeRich$hli)
+plot(propnativeRich$tmean, propnativeRich$hli)
+plot(propnativeRich$TSLF, propnativeRich$num_burn)
+plot(propnativeRich$hli, propnativeRich$aspect_name)
+plot(propnativeRich$crrnFRI, propnativeRich$num_burn)
+plot(propnativeRich$num_burn, propnativeRich$prop_native_rich)
+plot(propnativeRich$TSLF, propnativeRich$prop_native_rich)
+
+str(propnativeRich_small)
+data <- propnativeRich_small[ , c("ppt", "tmean", "elevation", "slope", "hli")]
+cor(data) #this looks good!!
+
+#determine outliers 
+min(propnativeRich_small$prop_native_rich) #0.217
+max(propnativeRich_small$prop_native_rich) #1
+mean(propnativeRich_small$prop_native_rich) #0.52
+ggplot(propnativeRich_small) +
+  aes(x = "", y = prop_native_rich) +
+  geom_boxplot(fill = "#0c4c8a") +
+  theme_minimal()
+hist(propnativeRich$prop_native_rich)
+
+m.propnatRich <- brm(
+  bf(prop_native_rich ~ 1 + num_burn, 
+     phi ~ num_burn),
+  data = propnativeRich_small,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234,
+  file = "models/nativeRich_jan.30.23")
+
+summary(m.propnatRich)
+conditional_effects(m.propnatRich)
+bayes_R2(m.propnatRich)
+plot(m.propnatRich)
+
+#visulaize posterior
+beta_bayes_pred <- m.propnatRich %>% 
+  epred_draws(newdata = tibble(num_burn = unique(propnativeRich$num_burn)))
+
+ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = num_burn)) +
+ #   stat_pointinterval(position = position_dodge(width = .4),
+#                     .width = c(.95))+
+ stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  guides(fill = "none") +
+  labs(x = "Predicted proportion native species", 
+       y = "Fire frequency",
+       caption = "80% and 95% credible intervals shown in black") 
 
 
+m.propnatRich2 <- brm(
+  bf(prop_native_rich ~ 1 + num_burn * year, 
+     phi ~ num_burn * year),
+  data = propnativeRich_small,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234,
+  file = "models/nativeRich2_jan.30.23")
 
+loo(m.propnatRich, m.propnatRich2)
+summary(m.propnatRich2)
+conditional_effects(m.propnatRich2)
+pp_check(m.propnatRich2)
+bayes_R2(m.propnatRich2)
 
-#gaussian based model seems better than gamma 
-hist(nativeRich$richness)
+m.propnatRich3 <- brm(
+  bf(prop_native_rich ~ 1 + num_burn * year + hli, 
+     phi ~ num_burn * year + hli),
+  data = propnativeRich_small,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234,
+  file = "models/nativeRich3_jan.30.23")
 
+summary(m.propnatRich3)
+conditional_effects(m.propnatRich3)
+bayes_R2(m.propnatRich3)
 
-n.natRich <- brm(richness ~ 1 + num_burn, 
-                 family = negbinomial(),
-                 data = nativeRich,
-                #prior=c(set_prior("cauchy(0,1)", class= "b")), 
-                 cores=4,
-                 file = "models/nativeRich_jan23")
-
-n.natRich2 <- brm(richness ~ num_burn*cool.warm_slope, 
-                  family = negbinomial(),
-                  data = nativeRich,
-                 #prior=c(set_prior("cauchy(0,1)", class= "b")), 
-                 control = list(adapt_delta = 0.998, max_treedepth = 15),
-                  iter = 5000,
-                  warmup = 1000, cores = 4, chains = 4,
-                 file = "models/nativeRich2_jan23")
-
-n.natRich3 <- brm(richness ~ num_burn*cool.warm_slope*year, 
-                  family = negbinomial(),
-                  data = nativeRich,
-                 #prior=c(set_prior("cauchy(0,1)", class= "b")), 
-                 control = list(adapt_delta = 0.998, max_treedepth = 15),
-                  iter = 5000,
-                  warmup = 1000, cores = 4, chains = 4,
-                 file = "models/nativeRich3_jan23")
-
-
-loo(n.natRich, n.natRich2, n.natRich3)
-summary(n.natRich2)
-contrasts(nativeRich$num_burn)
-hist(resid(n.natRich2))
+loo(m.propnatRich, m.propnatRich2, m.propnatRich3)
+summary(n.natRich3)
+hist(resid(n.natRich3))
 pp_check(n.natRich2)
-bayes_R2(n.natRich2)
+bayes_R2(n.natRich)
 
 
-
-ems <- emmeans(n.natRich3, specs= pairwise ~num_burn)
-summary(pairs(ems), point.est = mean)
-
-plot(conditional_effects(n.natRich2))
-
-  
-
-native.rich.model <- n.natRich3 %>% 
-  emmeans( ~num_burn * cool.warm_slope * year) %>% 
-  gather_emmeans_draws() %>% 
-  mutate(native_richness = .value)%>% 
-  select(-.chain, -.iteration, -.value) 
-native.rich.model
-
-#now plot!!
-native_rich_plot <- ggplot(data = native.rich.model,
-                           aes(x = num_burn, y=native_richness, 
-                               color = cool.warm_slope))+
-  stat_pointinterval(position = position_dodge(width = .4),
-                     .width = c(.95))+
-  labs(x = expression(italic("Fire Frequency")),
-       y = "Native Richness") +
-  scale_color_manual(values = cal_palette("gayophytum")) +
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
-        legend.title = element_blank())
-native_rich_plot
-
-#gaussian based model seems better than gamma 
-n.nonnatRich <- brm(richness ~ num_burn, data = nonnativeRich,
-                 prior=c(set_prior("normal(0,10)", class= "b")), 
-                 control = list(adapt_delta = 0.998, max_treedepth = 15),
-                  iter = 5000,
-                  warmup = 1000, cores = 4, chains = 4,
-                 file = "models/nonnativeRich_jan23")
-
-n.nonnatRich2 <- brm(richness ~ num_burn*cool.warm_slope, 
-                  data = nonnativeRich,
-                 prior=c(set_prior("normal(0,10)", class= "b")), 
-                 control = list(adapt_delta = 0.998, max_treedepth = 15),
-                  iter = 5000,
-                  warmup = 1000, cores = 4, chains = 4,
-                 file = "models/nonnativeRich2_jan23")
-
-n.nonnatRich3 <- brm(richness ~ num_burn*cool.warm_slope*year, 
-                  data = nonnativeRich,
-                 prior=c(set_prior("normal(0,10)", class= "b")), 
-                 control = list(adapt_delta = 0.998, max_treedepth = 15),
-                  iter = 5000,
-                  warmup = 1000, cores = 4, chains = 4,
-                 file = "models/nonnativeRich3_jan23")
-loo(n.nonnatRich, n.nonnatRich2, n.nonnatRich3)
-summary(n.nonnatRich2)
-contrasts(nonnativeRich$num_burn)
-hist(resid(n.nonnatRich))
-pp_check(n.nonnatRich)
-
-plot(conditional_effects(n.nonnatRich3))
-
-emmeans(n.nonnatRich, specs= pairwise ~num_burn)
-
-nonnative.rich.model <- n.nonnatRich3 %>% 
-  emmeans( ~num_burn* cool.warm_slope*year) %>% 
-  gather_emmeans_draws() %>% 
-  mutate(nonnative_richness = .value)
-nonnative.rich.model
-
-#now plot!!
-nonnative_rich_plot <- ggplot(data = nonnative.rich.model,
-                           aes(x = num_burn, y=nonnative_richness, 
-                              color = cool.warm_slope))+
-  stat_pointinterval(position = position_dodge(width = .4),
-                     .width = c(.95))+
-  labs(x = expression(italic("Fire Frequency")),
-       y = "Nonnative Richness") +
- scale_color_manual(values = cal_palette("gayophytum")) +
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
-        legend.title = element_blank())
-nonnative_rich_plot
-
-
-            
 ```
+
 
 # Shannon Diversity
 
@@ -539,97 +521,98 @@ xlab("Nonnative Shannon Diversity")
 
 
 ```
-# Seedling and resprout density and cover data
-This was cleaned up in lnu_clean file
 
-```{r seedling resprout data}
-
-
-shrub_density_wide <- read.csv("data/clean/LNU_subplot_shrub_density_wide.csv")
-shrub_density_long <- read.csv("data/clean/LNU_subplot_shrub_density_long.csv")
-
-```
-
-
-# Seedling Density
+# Seedling Density Regression (prop Native species)
 
 ```{r Seedling Density }
 
-library(lattice)
-library(MASS)
-library(lmtest)
-library(pscl)
-library(ggeffects)
-library(sjPlot)
+
 #####DENSITY
-str(shrub_density_long)
-shrub_density_long <- left_join(shrub_density_long, plot.description.short, by="PlotID")
+shrub_density_long <- read.csv("data/clean/LNU_subplot_shrub_density_long.csv")
+shrub_density_long <- left_join(shrub_density_long, plot.description_LNU, by="PlotID")
 shrub_density_long <- left_join(shrub_density_long, species.short, by ="spp")
 
 
-plot(density_ha ~ as.factor(num_burn), data=shrub_density_long)
+plot(density ~ as.factor(num_burn), data=shrub_density_long %>% filter(avg.sum =="avg.count"))
+plot(density ~ as.factor(num_burn), data=shrub_density_long %>% filter(avg.sum =="sum.count"))
+
+
 #check numbe of 0s
-100*sum(shrub_density_long$density_ha == 0)/nrow(shrub_density_long)
-#88% are 0s lolllll
+100*sum(shrub_density_long$density == 0)/nrow(shrub_density_long)
+
 
 #zero inflated model for obligate seeders only
 shrub_density_OBLS <- shrub_density_long %>%
+  filter(avg.sum == "sum.count") %>% 
   filter(seed.resp == "SEEDLING") %>% 
   filter(fac.obl == "OBL-S") %>% 
-  filter(spp != "ACMGLA") 
+  filter(spp != "ACMGLA") %>% 
+  mutate(presence = case_when(
+    density == 0 ~ 0,
+    density > 0 ~ 1
+  ))
 unique(shrub_density_OBLS$spp)
 
 shrub_density_OBLS$num_burn <- as.factor(shrub_density_OBLS$num_burn)
 
-hist(shrub_density_OBLS$density_ha)
+hist(shrub_density_OBLS$presence)
+mean(shrub_density_OBLS$density)
+sd(shrub_density_OBLS$density)
+
+ggplot(shrub_density_OBLS, aes(x=num_burn, y = presence))+
+  geom_point()
+
+prior2 <- c(
+    prior(normal(0, 10), class = Intercept, coef = ""),
+    prior(normal(0, 10), class = b)
+    )
+
 n.shrubDensityOBL <- brm(data = shrub_density_OBLS,
-                      density_ha ~ num_burn,
-                       family = zero_inflated_negbinomial(),
-                      prior = c(set_prior('horseshoe(1)')),
-                 cores=4,
+                      presence ~ 1+ num_burn,
+                      family = zero_inflated_binomial(),
+                     # prior = prior2,
+                      #control = list(adapt_delta = 0.998, max_treedepth = 15),
+                    #iter = 5000,
+                  #warmup = 1000, c
+                  cores = 4, chains = 4,
                  file = "models/shrubDensityOBL")
 
+
+n.shrubDensityOBL2 <- brm(data = shrub_density_OBLS,
+                      density ~ 1+ num_burn*cool.warm_slope,
+                       family = binomial(link = "logit"),
+                      prior = c(set_prior('horseshoe(1)')),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                  iter = 5000,
+                  warmup = 1000, cores = 4, chains = 4,
+                 file = "models/shrubDensityOBL2")
+
 summary(n.shrubDensityOBL)
+plot(n.shrubDensityOBL)
 pp_check(n.shrubDensityOBL)
 conditional_effects(n.shrubDensityOBL)
 
 OBLS.model <- n.shrubDensityOBL%>% 
   emmeans( ~num_burn) %>% 
   gather_emmeans_draws() %>% 
-  mutate(density_ha = .value)
+  mutate(density = .value)
 OBLS.model
 
-M1 <- zeroinfl(density_ha ~ 0 + as.factor(num_burn),
-               dist = "negbin",
-          data = shrub_density_OBLS)
-summary(M1)
-tab_model(M1)
-tab_model(M1, file = "tables/OBLS_model_output.html")
+OBLS.model_plot <- ggplot(data = OBLS.model,
+                           aes(x = num_burn, y=density))+
+  stat_pointinterval(position = position_dodge(width = .4),
+                     .width = c(.95))+
+  labs(x = expression(italic("Fire Frequency")),
+       y = "Obligate seeder density") +
+ scale_color_manual(values = cal_palette("gayophytum")) +
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
+OBLS.model_plot
 
-#check for over/underdispersion
-E2 <- resid(M1, type = "pearson")
-N <- nrow(shrub_density_long)
-p <- length(coef(M1))
-sum(E2^2)/(N-p)
-#.095 looks good
 
-mydf <- ggpredict(M1, type= "zi_random", terms = c("num_burn"))
-
-ggplot(mydf, aes(as.factor(x), predicted))+
-  geom_point(size=3,position = position_dodge(.1), aes(color=as.factor(x))) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
-              position = position_dodge(.1),
-              width=.1, size=.3) +
-  scale_colour_viridis_d()+
-  xlab("Fire frequency")+
-  ylab("Obligate Seedling density/Ha")+
-  theme_bw()+
-  theme(legend.position = "none",
-  axis.text = element_text(size=12),
-  text = element_text(size = 14),
-  panel.grid = element_blank())
-ggsave(file="figures/obl_seed_predicted.svg", width = 4.5, height = 3.5)
-ggsave(file="figures/obl_seed_predicted.png", width = 4.5, height = 3.5)
 
 
 #zero inflated model for facultative seeders only
@@ -785,7 +768,93 @@ ggsave(file="figures/LEPCAL_seed_predicted.png", width = 4.5, height = 3.5)
 
 ```
 
+# RANDOM FOREST - SHRUB DENSITY
 
+```{r RF shrub den}
+
+library(randomForest)
+library(party)
+library(stablelearner)
+
+#####DENSITY
+shrub_density_long <- read.csv("data/clean/LNU_subplot_shrub_density_long.csv")
+shrub_density_long <- left_join(shrub_density_long, plot.description_LNU, by="PlotID")
+shrub_density_long <- left_join(shrub_density_long, species.short, by ="spp")
+str(shrub_density_long)
+#make num_burn categorical
+shrub_density_long$num_burn <- as.factor(shrub_density_long$num_burn)
+shrub_density_long$preFireYear <- as.factor(shrub_density_long$preFireYear)
+shrub_density_long$mCC_FRI <- as.factor(shrub_density_long$mCC_FRI)
+shrub_density_long$aspect_name <- as.factor(shrub_density_long$aspect_name)
+shrub_density_long$TSLF <- as.factor(shrub_density_long$TSLF)
+shrub_density_long$spp <- as.factor(shrub_density_long$spp)
+shrub_density_long$Site <- as.factor(shrub_density_long$Site)
+
+
+#OBLIGATE SEEDERS
+shrub_density_OBLS <- shrub_density_long %>%
+  filter(PFR == "chaparral and serotinous conifer") %>% 
+  filter(avg.sum == "sum.count") %>% 
+  filter(seed.resp == "SEEDLING") %>% 
+  filter(fac.obl == "OBL-S") %>% 
+  filter(spp != "ACMGLA") %>% 
+  mutate(presence = case_when(
+    density == 0 ~ 0,
+    density > 0 ~ 1
+  ))
+
+unique(shrub_density_OBLS$spp)
+unique(shrub_density_OBLS$TSLF)
+unique(shrub_density_OBLS$presence)
+str(shrub_density_OBLS)
+
+shrub_density_OBLS$presence <- as.factor(shrub_density_OBLS$presence)
+
+OBLS_den_short <- shrub_density_OBLS %>% 
+  dplyr::select(presence, num_burn,
+                mCC_FRI, ppt, tmean, elevation, slope, aspect_name, hli, TSLF)
+str(OBLS_den_short)
+
+library(party)
+library(partykit)
+library(rpart)
+library(rpart.plot)
+#run random forest model
+ctree1 <- ctree(presence ~ num_burn + elevation + aspect_name + TSLF,
+                    data = OBLS_den_short)
+                    controls= ctree_control (testtype = c("Bonferroni"), 
+                                             mincriterion = 0.95))
+ctree1
+plot(ctree1)
+
+rpartv1 <- rpart(presence ~ num_burn + ppt + tmean + aspect_name + elevation,
+                    data = OBLS_den_short,
+                    method = "class", 
+                    control = rpart.control(cp=.2))
+rpart.plot(rpartv1)
+summary(rpartv1)
+#prediction of fitted mean and visualization
+plot(presence ~., data = OBLS_den_short)
+cf1 <- stablelearner::as.stabletree(cforest1)
+summary(cf1, original = FALSE)
+barplot(cf1)
+
+
+
+
+#Facultative seeders
+shrub_density_FAC <- shrub_density_long %>%
+  filter(seed.resp == "SEEDLING") %>% 
+  filter(fac.obl == "FAC") %>% 
+  filter(spp != "MIMAUR") %>% 
+    filter(spp != "HOLDIS") 
+unique(shrub_density_FAC$spp)
+
+
+```
+
+
+#Shrub Cover
 
 ```{r}
 

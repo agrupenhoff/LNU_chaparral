@@ -1,0 +1,293 @@
+---
+title: "SpatialData_LNU"
+author: "Grupenhoff"
+date: "2023-01-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/Users/ashleygrup/LNU_chaparral")
+
+library(dplyr)
+library(tidyverse)
+library(tmap)
+library(ggplot2)
+library(maps)
+library(mapdata)
+library(ggmap)
+library(viridis)
+
+library(rgdal)
+library(raster)
+library(elevatr)
+library(rasterVis)
+library(elevatr)
+library(spatialEco)
+library(gstat)
+library(rgeos)
+library(geosphere)
+library(osmdata)
+library(ggOceanMaps)
+library(sf)
+
+```
+
+## Create spatial data for LNU plots & create simple map
+
+```{r spatial}
+lnu_plot <- read.csv("data/raw/Plot_Locations_jan23.csv")
+
+
+lnu_plot_sf <- st_as_sf(lnu_plot, 
+                          coords = c("X","Y"),
+                          crs = 26910)
+
+#Projection transformation
+lnu_plot_transf = st_transform(lnu_plot_sf, crs = "+proj=longlat +datum=WGS84")
+str(lnu_plot_sf)
+#assign WGS84 projection which has EPSG code 
+st_crs(lnu_plot_transf)
+
+#create bounding box around attribute data
+bbox_lnu_plot <- st_bbox(lnu_plot_transf)
+bbox_lnu_plot
+
+#map of states
+usa <- map_data("state")
+unique(usa$region)
+westUS <- usa %>% 
+  filter(region == "california")
+           
+ggplot()+
+  geom_polygon(data= westUS, aes(x= long, y=lat, 
+                                 group=group),
+               alpha=.5)+
+  #add point data 
+  geom_sf(data = lnu_plot_transf, 
+          fill = NA,
+          size = 1.5)+
+  #zoom into study area
+  coord_sf(xlim = c(-122.6, -122),
+           ylim = c(38.4,39))
+
+
+#save as shapefile
+st_write(lnu_plot_transf, "data/clean/spatial/LNU_spatialData", 
+         driver = "ESRI Shapefile", delete_layer = TRUE)
+
+```
+
+# RESOLVE DATA
+
+
+```{r pressure, echo=FALSE}
+#import RESOLVE data
+sf_use_s2(FALSE)
+resolve_data <- st_read("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/Ecoregions2017/Ecoregions2017.shp")
+st_crs(resolve_data) <- 4326
+st_crs(resolve_data)
+st_crs(attributes_sf)
+
+#create bounding box around attribute data
+bbox_lnu_plot <- st_bbox(lnu_plot_transf)
+bbox_lnu_plot
+
+resolve_cropped <- st_crop(resolve_data, bbox_lnu_plot)
+str(resolve_cropped)
+
+#get resolve dat for points 
+lnu_resolvedata <- st_join(lnu_plot_transf,
+                                  left=FALSE,
+                                  resolve_cropped)
+
+
+ggplot()+
+  geom_polygon(data= westUS, aes(x= long, y=lat, 
+                                 group=group),
+               alpha=.5)+
+  #add point data 
+  geom_sf(data = lnu_plot_transf, 
+          fill = NA,
+          size = 1.5)+
+  scale_fill_viridis_d()+
+  #zoom into study area
+geom_sf(data = lnu_resolvedata,
+        mapping = aes(fill = BIOME_NAME),
+        alpha = .5)
+
+#grab only ecoregion name and combine with clean attribute file
+
+```
+
+# CLIMATE DATA - prism
+
+```{r prism}
+# load temp and precip
+ppt = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_ppt_30yr_normal_800mM3_annual_bil/PRISM_ppt_30yr_normal_800mM3_annual_bil.bil")
+tmean = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_tmean_30yr_normal_800mM3_annual_bil/PRISM_tmean_30yr_normal_800mM3_annual_bil.bil")
+tmean
+# load plots
+plots = st_read("data/clean/spatial/LNU_spatialData/LNU_spatialData.shp")
+
+# extract ppt and tmean at plots
+plots$ppt = terra::extract(ppt,vect(plots))[,2]
+plots$tmean = terra::extract(tmean,vect(plots))[,2]
+
+
+# trim the data frame to UniquID and cliamte data only
+plots_simple = plots
+st_geometry(plots_simple) = NULL # make it non-spatial (just a data frame)
+
+
+# write
+write_csv(plots_simple,"data/clean/spatial/lnu_plot_climate.csv")
+
+
+```
+
+# DEM (digital elevation model)
+
+```{r DEM}
+getwd()
+#USA
+plots = st_read("data/clean/spatial/LNU_spatialData/LNU_spatialData.shp")
+#point elevation data
+lnu_elevation_aws <- get_elev_point(plots, src = "aws", z=12)
+lnu_elevation_aws$elevation
+
+#raster elevation data
+elevation <- get_elev_raster(lnu_plot_transf, z=12)
+plot(elevation)
+plot(lnu_plot_transf, add=TRUE)
+#write DEM to local directory
+# write to geotiff file (depends on rgdal)
+#if (require(rgdal)) {
+#  rf <- writeRaster(elevation, filename=file.path("data/clean/spatial/lnu_dem_z12.tif"), #format="GTiff", overwrite=TRUE)
+#}
+
+elevation
+
+
+slope <-  terrain(elevation, opt='slope', unit='degrees')
+aspect <-  terrain(elevation, opt='aspect',unit='degrees')
+hill <-  hillShade(slope,aspect,40,315)
+eastwest <- sin(aspect)
+northsouth <- cos(aspect)
+
+names(slope)
+names(northsouth) <- "northsouth"
+names(eastwest) <- "eastwest"
+names(aspect)
+names(elevation) <- "elevation"
+
+topo <- stack(elevation, slope, aspect, northsouth, eastwest)
+topo
+plot(topo)
+
+class(lnu_plot_transf)
+
+#extract topographic data from raster using extract
+pts_topo <- terra::extract(topo, lnu_elevation_aws)
+pts.topo <- data.frame(pts_topo)
+str(pts_topo)
+str(lnu_elevation_aws)
+st_geometry(lnu_elevation_aws) = NULL # make it non-spatial (just a data frame)
+# join topo data with main plot file
+plots_final <- cbind(lnu_elevation_aws, pts_topo)
+
+#save final file
+write.csv(plots_final, "data/clean/LNU_plot_data_final.csv", row.names = FALSE)
+
+```
+
+# Calculate HEAT LOAD INDEX
+
+```{r HLI}
+getwd()
+# Function "heatload"
+plots = st_read("data/clean/spatial/LNU_spatialData/LNU_spatialData.shp")
+
+elevation
+elevation_spat <- rast(elevation)
+
+# Calculates heat load or potential annual direct incident radiation, using the formulas published in 
+# McCune & Keon (2002) based on aspect, slope and latitude.
+
+heat.load <- hli(elevation_spat)
+plot(heat.load)
+heat.load
+# extract ppt and tmean at plots
+plots$hli = terra::extract(heat.load,vect(plots))[,2]
+plots_simple = plots
+st_geometry(plots_simple) = NULL # make it non-spatial (just a data frame)
+plots_hli <- plots_simple %>% 
+  dplyr::select(PlotID, hli)
+
+#add to plots final data
+plots_final <- read.csv( "data/clean/LNU_plot_data_final.csv")
+
+plots_final_hli <- left_join(plots_final, plots_hli, by = "PlotID")
+
+#save final file
+write.csv(plots_final_hli, "data/clean/LNU_plot_data_final.csv", row.names = FALSE)
+
+```
+
+
+# Calculate Distance from coast
+
+```{r}
+#final dataset
+plots_final <- read.csv( "data/clean/LNU_plot_data_final.csv")
+
+#spatial data
+plots = st_read("data/clean/spatial/LNU_spatialData/LNU_spatialData.shp")
+st_set_crs(plots, 4326)
+st_crs()
+
+# get bouding box for osm data download (England) and 
+# download coastline data for this area
+osm_box <- getbb (place_name = "USA") %>% 
+  opq () %>% 
+  add_osm_feature("natural", "coastline") %>% 
+  osmdata_sf() 
+
+# use dist2Line from geosphere - only works for WGS84 
+#data
+dist <- geosphere::dist2Line(p = st_coordinates(plots), 
+                         line = st_coordinates(osm_box$osm_lines)[,1:2])
+
+#combine initial data with distance to coastline
+df <- cbind( d1 %>% rename(y=lat,x=long),dist) %>%
+  mutate(miles=distance/1609)
+```
+
+
+# clean final file!!
+
+```{r CLEAN}
+plots_final <- read.csv( "data/clean/LNU_plot_data_final.csv")
+str(plots_final)
+
+plots_clean <- plots_final %>% 
+  dplyr::rename(num_burn = nm_prr_,
+                burned = Burned_,
+                preFireName = fr_prLNU_n,
+                preFireYear = fr_prLNU_y,
+                aspect_degrees = aspect) %>% 
+  replace_na(list(preFireYear = 1950)) %>% 
+  mutate(TSLF = 2020-preFireYear) %>% 
+  mutate(aspect_name = case_when(
+    aspect_degrees < 22.5 ~ "north",
+    aspect_degrees < 67.5 ~ "northeast",
+    aspect_degrees < 112.5 ~ "east",
+    aspect_degrees < 157.5 ~ "southeast",
+    aspect_degrees < 202.5 ~ "south",
+    aspect_degrees < 247.5 ~ "southwest",
+    TRUE ~ "west"
+  ))
+
+write_csv(plots_clean, "data/clean/LNU_plot_description_CLEAN.csv")
+```
+
