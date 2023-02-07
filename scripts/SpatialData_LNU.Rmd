@@ -24,7 +24,6 @@ library(elevatr)
 library(rasterVis)
 library(elevatr)
 library(spatialEco)
-library(gstat)
 library(rgeos)
 library(geosphere)
 library(osmdata)
@@ -235,34 +234,6 @@ write.csv(plots_final_hli, "data/clean/LNU_plot_data_final.csv", row.names = FAL
 ```
 
 
-# Calculate Distance from coast
-
-```{r}
-#final dataset
-plots_final <- read.csv( "data/clean/LNU_plot_data_final.csv")
-
-#spatial data
-plots = st_read("data/clean/spatial/LNU_spatialData/LNU_spatialData.shp")
-st_set_crs(plots, 4326)
-st_crs()
-
-# get bouding box for osm data download (England) and 
-# download coastline data for this area
-osm_box <- getbb (place_name = "USA") %>% 
-  opq () %>% 
-  add_osm_feature("natural", "coastline") %>% 
-  osmdata_sf() 
-
-# use dist2Line from geosphere - only works for WGS84 
-#data
-dist <- geosphere::dist2Line(p = st_coordinates(plots), 
-                         line = st_coordinates(osm_box$osm_lines)[,1:2])
-
-#combine initial data with distance to coastline
-df <- cbind( d1 %>% rename(y=lat,x=long),dist) %>%
-  mutate(miles=distance/1609)
-```
-
 
 # clean final file!!
 
@@ -270,7 +241,12 @@ df <- cbind( d1 %>% rename(y=lat,x=long),dist) %>%
 plots_final <- read.csv( "data/clean/LNU_plot_data_final.csv")
 str(plots_final)
 
-plots_clean <- plots_final %>% 
+#add distance to coast and geology file
+#final dataset
+LNU_coast_geology <- read.csv("data/clean/spatial/LNU_distance2coast.csv")
+plots_coast <- left_join(plots_final, LNU_coast_geology, by = "PlotID")
+
+plots_clean <- plots_coast %>% 
   dplyr::rename(num_burn = nm_prr_,
                 burned = Burned_,
                 preFireName = fr_prLNU_n,
@@ -285,9 +261,18 @@ plots_clean <- plots_final %>%
     aspect_degrees < 157.5 ~ "southeast",
     aspect_degrees < 202.5 ~ "south",
     aspect_degrees < 247.5 ~ "southwest",
-    TRUE ~ "west"
+    aspect_degrees < 292.5 ~ "west",
+    aspect_degrees < 337.5 ~ "northwest",
+    TRUE ~ "north"
+  ),
+  cool_warm_slope = case_when(
+    aspect_degrees < 112.5 ~ "cool",
+    aspect_degrees < 292.5 ~ "warm",
+    TRUE ~ "cool"
   ))
 
 write_csv(plots_clean, "data/clean/LNU_plot_description_CLEAN.csv")
+
+
 ```
 
