@@ -193,36 +193,6 @@ write_csv(LNU_richness_final, "data/clean/LNU_subplot_RICHNESS.csv")
             
 ```
 
-# model richness random forest
-
-```{r RF RICH}
-LNU_richness <- read.csv("data/clean/LNU_subplot_RICHNESS.csv")
-
-str(LNU_richness)
-LNU_richness$num_burn <- as.factor(LNU_richness$num_burn)
-LNU_richness$TSLF <- as.factor(LNU_richness$TSLF)
-LNU_richness$mCC_FRI <- as.factor(LNU_richness$mCC_FRI)
-LNU_richness$aspect_name <- as.factor(LNU_richness$aspect_name)
-LNU_richness$year <- as.factor(LNU_richness$year)
-LNU_richness$elevation <- as.numeric(LNU_richness$elevation)
-
-propnativeRich <- LNU_richness %>% 
-  filter(native.nonnative.prop == "mean_propNative")  %>% 
-  filter(PFR != "oak woodland")
-propnativeRich_small <- propnativeRich %>% 
-  dplyr::select(richness, year, num_burn, mCC_FRI, TSLF,
-         ppt, tmean, elevation, slope, aspect_name, hli)
-
-rich_mod <- bf(richness ~ num_burn + cover)
-cover_mod <- bf(cover ~ firesev)
-
-k_fit_brms <- brm(rich_mod +
-                  cover_mod + 
-                  set_rescor(FALSE), 
-                data=keeley,
-                cores=4, chains = 2)
-
-```
 
 # model richness regression 
 
@@ -267,7 +237,7 @@ str(propnativeRich)
 propnativeRich$num_burn <- as.factor(propnativeRich$num_burn)
 
 propnativeRich_small <- propnativeRich %>% 
-  dplyr::select(prop_native_rich, year, num_burn, mCC_FRI, TSLF,
+  dplyr::select(prop_native_rich, year, Site, num_burn, mCC_FRI, TSLF,
          ppt, tmean, elevation, slope, Distance_km, hli,
          Geology, aspect_name, cool_warm_slope) %>% 
   #can't have exactly 0 or 1
@@ -329,7 +299,7 @@ beta_bayes_pred <- m.propnatRich %>%
 ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = num_burn)) +
   stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
   scale_fill_manual(values = cal_palette("sierra1")) +
-  labs(x = "Predicted proportion of native species", y = NULL,
+  labs(x= "Predicted proportion of native species", y = NULL,
        caption = "80% and 95% credible intervals shown in black")
 
 
@@ -357,9 +327,11 @@ beta_bayes_pred <- m.propnatRich2b %>%
 
 
 ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = year)) +
+  #stat_pointinterval(position = position_dodge(width = .4),
+  #                               .width = c(0.95))+
   stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
   scale_fill_manual(values = cal_palette("sierra1")) +
-  labs(x = "Predicted proportion of native species", y = NULL,
+  labs(y = "Predicted proportion of native species", x = NULL,
        caption = "80% and 95% credible intervals shown in black")
 
 m.propnatRich2b <- brm(
@@ -377,8 +349,8 @@ summary(m.propnatRich2b)
 conditional_effects(m.propnatRich2b)
 
 m.propnatRich3 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn + year + hli, 
-     phi ~ num_burn + year + hli),
+  bf(prop_native_rich ~ 1 + num_burn * year + hli, 
+     phi ~ num_burn * year + hli),
   data = propnativeRich_small,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
@@ -394,22 +366,25 @@ bayes_R2(m.propnatRich3)
 
 # Plug a dataset where quota is FALSE and TRUE into the model
 range(propnativeRich_small$hli)
+mean(propnativeRich$hli)
 beta_bayes_pred <- m.propnatRich3 %>% 
   epred_draws(newdata = expand_grid(num_burn = unique(propnativeRich$num_burn),
                                     year = unique(propnativeRich$year),
-                                    hli = c(.3:1))) 
+                                    hli = c(.7))) 
 
 
-ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = year)) +
+ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred)) +
+  #stat_pointinterval(position = position_dodge(width = .4),
+  #                              .width = c(0.95))+
   stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
   scale_fill_manual(values = cal_palette("sierra1")) +
-  labs(x = "Predicted proportion of native species", y = NULL,
+  labs(y = "Predicted proportion of native species", x = NULL,
        caption = "80% and 95% credible intervals shown in black")
 
 
 m.propnatRich4 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn + year + hli + ppt, 
-     phi ~ num_burn + year + hli + ppt),
+  bf(prop_native_rich ~ 1 + num_burn * year + hli + ppt, 
+     phi ~ num_burn * year + hli + ppt),
   data = propnativeRich_small,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
@@ -418,7 +393,7 @@ m.propnatRich4 <- brm(
 save(m.propnatRich4, file = "models/nativeRich4_feb23.rda")
 load("models/nativeRich4_feb23.rda")
 
-loo(m.propnatRich,m.propnatRich2b,  m.propnatRich3, m.propnatRich4)
+loo(m.propnatRich,m.propnatRich2,  m.propnatRich3, m.propnatRich4)
 summary(m.propnatRich4)
 conditional_effects(m.propnatRich4)
 bayes_R2(m.propnatRich4)
@@ -426,16 +401,21 @@ bayes_R2(m.propnatRich4)
 # Plug a dataset where quota is FALSE and TRUE into the model
 range(propnativeRich_small$hli)
 range(propnativeRich_small$ppt)
-beta_bayes_pred <- m.propnatRich3 %>% 
-  epred_draws(newdata = expand_grid(num_burn = unique(propnativeRich$num_burn),
+beta_bayes_pred <- m.propnatRich4 %>% 
+    epred_draws(newdata = expand_grid(num_burn = unique(propnativeRich$num_burn),
                                     year = unique(propnativeRich$year),
                                     hli = c(.3:1),
-                                    ppt = c(626:768))) 
+                                    ppt = c(700))) 
+head(beta_bayes_pred)
 
 
-ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = ppt)) +
-  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
-  scale_fill_manual(values = cal_palette("sierra1")) +
+
+ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, 
+                            color = num_burn)) +
+  stat_pointinterval(position = position_dodge(width = .4),
+                                 .width = c(0.95))+
+ # stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
+  scale_color_manual(values = cal_palette("sierra1")) +
   labs(x = "Predicted proportion of native species", y = NULL,
        caption = "80% and 95% credible intervals shown in black")
 
@@ -452,26 +432,24 @@ library(rpart)
 library(rpart.plot)
 
 str(propnativeRich_small)
+propnativeRich_small$Site <- as.factor(propnativeRich_small$Site)
 propnativeRich_small$ppt <- as.numeric(propnativeRich_small$ppt)
 #run random forest model
-ctree1 <- ctree(prop_native_rich ~ num_burn + year + hli + cool_warm_slope + ppt,
-                    data = propnativeRich_small,
-                    controls= ctree_control (testtype = c("Bonferroni"), 
-                                             mincriterion = 0.95))
-ctree1
-plot(ctree1)
 
-rpartv1 <- rpart(prop_native_rich ~ num_burn + year + hli + cool_warm_slope, ppt,
+ctree <- ctree(prop_native_rich ~ num_burn ,
+                data = propnativeRich_small)
+plot(ctree)
+
+ctree1 <- ctree(prop_native_rich ~ num_burn + TSLF +
+                  hli + cool_warm_slope + ppt ,
                     data = propnativeRich_small,
-                    method = "class", 
-                    control = rpart.control(cp=.2))
-rpart.plot(rpartv1, box.palette = "blue")
-summary(rpartv1)
-#prediction of fitted mean and visualization
-plot(prop_native_rich ~., data = propnativeRich_small)
-cf1 <- stablelearner::as.stabletree(cforest1)
-summary(cf1, original = FALSE)
-barplot(cf1)
+                control = ctree_control(testtype = "Bonferroni"))
+
+dev.off()
+print(ctree1)
+plot(ctree1)
+varimp(ctree1)
+varimp(ctree1, conditional = TRUE)
 
 ```
 
@@ -660,32 +638,35 @@ shrub_density_OBLS <- shrub_density_long %>%
     density == 0 ~ 0,
     density > 0 ~ 1
   ))
-unique(shrub_density_OBLS$spp)
+
+
 
 shrub_density_OBLS$num_burn <- as.factor(shrub_density_OBLS$num_burn)
 
 hist(shrub_density_OBLS$presence)
+hist(log(shrub_density_OBLS$presence))
 mean(shrub_density_OBLS$density)
 sd(shrub_density_OBLS$density)
 
-ggplot(shrub_density_OBLS, aes(x=num_burn, y = presence))+
-  geom_point()
 
 prior2 <- c(
     prior(normal(0, 10), class = Intercept, coef = ""),
     prior(normal(0, 10), class = b)
     )
 
-n.shrubDensityOBL <- brm(data = shrub_density_OBLS,
+m.shrubDensityOBL <- brm(data = shrub_density_OBLS,
                       presence ~ 1+ num_burn,
                       family = zero_inflated_binomial(),
                      # prior = prior2,
-                      #control = list(adapt_delta = 0.998, max_treedepth = 15),
-                    #iter = 5000,
-                  #warmup = 1000, c
-                  cores = 4, chains = 4,
-                 file = "models/shrubDensityOBL")
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
 
+save(m.shrubDensityOBL, file = "models/shrubDensityOBL.rda")
+
+summary(m.shrubDensityOBL)
+conditional_effects(m.shrubDensityOBL)
 
 n.shrubDensityOBL2 <- brm(data = shrub_density_OBLS,
                       density ~ 1+ num_burn*cool.warm_slope,
