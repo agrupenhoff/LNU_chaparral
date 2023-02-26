@@ -87,10 +87,9 @@ ggplot(data=sevdata %>%
   geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))+
   geom_errorbar(aes(ymin=mean_diam_mm_avg-se, ymax=mean_diam_mm_avg+se), width=.1, size=.7)+
   #geom_point(size=3, aes(colour=factor(num_burn)))+
-  scale_colour_viridis_d()+
-  scale_fill_viridis_d()+
+  scale_fill_manual(values = cal_palette("sierra1")) +
                      xlab("Fire frequency")+
-                     ylab("Fire Severity")+
+                     ylab("Fire Severity (mm)")+
                     theme_bw()+
                    theme(legend.title = element_blank(),
                            axis.text = element_text(size=15),
@@ -504,11 +503,20 @@ ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred,
 final model beta binomial p(native cover) ~ 1 + num_burn + year 
 phi ~ 1+num_burn + year
 
+Model comparisons:
+                        elpd_diff se_diff
+m.prop.cover.rich         0.0       0.0  
+m.prop.cover.rich_year   -6.8       6.3  
+m.prop.cover.rich_hli   -10.2       5.9  
+m.prop.cover.rich_ppt   -13.6       6.0  
+m.prop.cover.rich_tmean -14.0       7.3  
+m.prop.cover.rich_slope -14.5       6.5 
+
 ```{r}
 LNU_cover_final <- read.csv("data/clean/LNU_speciesCover_FINAL.csv")
 
 str(LNU_cover_final)
-LNU_cover_final$num_burn <- as.factor(LNU_cover_final$num_burn)
+LNU_cover_final$num_burn <- as.numeric(LNU_cover_final$num_burn)
 LNU_cover_final$TSLF <- as.factor(LNU_cover_final$TSLF)
 LNU_cover_final$mCC_FRI <- as.factor(LNU_cover_final$mCC_FRI)
 LNU_cover_final$aspect_name <- as.factor(LNU_cover_final$aspect_name)
@@ -524,10 +532,7 @@ LNU_cover_prop <- LNU_cover_final %>%
    mutate(cover= ifelse(cover == 1, 0.999, cover))
 
 ggplot(LNU_cover_prop, aes(x=num_burn, y=cover))+
-  geom_boxplot()
-
-ggplot(LNU_cover_prop, aes(x=as.numeric(num_burn), y=cover))+
-  geom_smooth()
+  geom_smooth(method="lm")
 
 ggplot(LNU_cover_prop, aes(x=cool_warm_slope, y=cover))+
   geom_point()
@@ -565,6 +570,61 @@ m.prop.cover.rich <- brm(
 save(m.prop.cover.rich, file= "models/nativeCover_feb23.rda")
 load("models/nativeCover_feb23.rda")
 
+m.prop.cover.rich_year <- brm(
+  bf(cover ~ 1 + year, 
+     phi ~ year),
+  data = LNU_cover_prop,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+summary(m.prop.cover.rich_year)
+
+m.prop.cover.rich_ppt <- brm(
+  bf(cover ~ 1 + ppt, 
+     phi ~ ppt),
+  data = LNU_cover_prop,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+summary(m.prop.cover.rich_ppt)
+conditional_effects(m.prop.cover.rich_ppt)
+
+m.prop.cover.rich_tmean <- brm(
+  bf(cover ~ 1 + tmean, 
+     phi ~ tmean),
+  data = LNU_cover_prop,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+summary(m.prop.cover.rich_tmean)
+
+m.prop.cover.rich_hli <- brm(
+  bf(cover ~ 1 + hli, 
+     phi ~ hli),
+  data = LNU_cover_prop,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+
+m.prop.cover.rich_slope <- brm(
+  bf(cover ~ 1 + cool_warm_slope, 
+     phi ~ cool_warm_slope),
+  data = LNU_cover_prop,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+
+loo(m.prop.cover.rich, m.prop.cover.rich_year, 
+    m.prop.cover.rich_hli, 
+    m.prop.cover.rich_ppt, 
+    m.prop.cover.rich_tmean, 
+    m.prop.cover.rich_slope)
+
 tidy(m.prop.cover.rich, effects = "fixed")
 summary(m.prop.cover.rich)
 plot(m.prop.cover.rich)
@@ -598,10 +658,14 @@ load("models/nativeCover_feb23_3.rda")
 summary(m.prop.cover.rich3)
 loo(m.prop.cover.rich, m.prop.cover.rich3)
 conditional_effects(m.prop.cover.rich3)
+plot(m.prop.cover.rich3)
+mcmc_plot(m.prop.cover.rich3)
+pp_check(m.prop.cover.rich3)
+bayes_R2(m.prop.cover.rich3)
 
 m.prop.cover.rich4 <- brm(
-  bf(cover ~ 1 + num_burn + year + cool_warm_slope, 
-     phi ~ num_burn + year + cool_warm_slope),
+  bf(cover ~ 1 + num_burn + year + hli + ppt + tmean, 
+     phi ~ num_burn + year + hli),
   data = LNU_cover_prop,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
@@ -611,30 +675,60 @@ save(m.prop.cover.rich4, file= "models/nativeCover_feb23_4.rda")
 load("models/nativeCover_feb23_4.rda")
 
 summary(m.prop.cover.rich4)
-loo(m.prop.cover.rich, m.prop.cover.rich3, m.prop.cover.rich4)
+loo(m.prop.cover.rich, m.prop.cover.rich2)
 conditional_effects(m.prop.cover.rich4)
-bayes_R2(m.prop.cover.rich4)
+bayes_R2(m.prop.cover.rich2)
 mcmc_plot(m.prop.cover.rich4)
 
+range(LNU_cover_prop$hli)
 nd <- expand_grid(num_burn=unique(LNU_cover_prop$num_burn),
                   year = unique(LNU_cover_prop$year))
 
-beta_bayes_pred <- m.prop.cover.rich3%>% 
-    epred_draws(newdata = nd) %>% 
+beta_bayes_pred <- m.prop.cover.rich%>% 
+    epred_draws(newdata = nd)  
     group_by(num_burn, .draw) %>% 
     dplyr::summarise(.epred = mean(.epred))
 
 head(beta_bayes_pred)
 
-ggplot(beta_bayes_pred %>% filter(num_burn != "7"), 
-       aes(x = num_burn, y = .epred, fill=num_burn)) +
-  #stat_pointinterval(position = position_dodge(width = .4),
-  #                               .width = c(0.95))+
- stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
-  scale_fill_manual(values = cal_palette("sierra1")) +
-  labs(y = "Predicted proportion of native species (cover)", 
-       x = "Fire Frequency",
-       caption = "80% and 95% credible intervals shown in black")
+ggplot(beta_bayes_pred, aes(x=num_burn, y=.epred))+
+  stat_lineribbon()+
+  scale_fill_brewer(palette = "Reds")+
+  labs(x = "Fire frequency", 
+       y = "Proportion of native species",
+       fill = "Credible interval") +
+  theme(legend.position = "bottom")
+
+nd <- expand_grid(num_burn=seq(1,7,by=.01),
+                  year = unique(LNU_cover_prop$year))
+fitted_prop <- fitted(m.prop.cover.rich,
+                 newdata = nd)
+head(fitted_prop)
+fitted_prop_sum <- fitted_prop %>% 
+  as.data.frame() 
+
+fitted_final <- cbind(fitted_prop_sum, nd)
+head(fitted_final)
+cal <- cal_palette("sierra1", n = 50, type = "continuous")
+
+ggplot(fitted_final, aes(x=num_burn))+
+  geom_smooth(aes(y = Estimate, 
+                  ymin = Q2.5, ymax = Q97.5),
+              stat = "identity", 
+              color = "#9999CC",
+              alpha = 1/4, size = 1/2)+
+  geom_point(aes(y = Estimate),
+             size = 2/3,
+             color = "#9999CC") +
+  labs(x = expression(italic("Fire frequency")),
+       y = expression(italic("Proportion of native species"))) +
+  scale_fill_gradientn(colours = cal) + 
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
+
 
 ```
 
@@ -687,7 +781,18 @@ varimp(ctree1, conditional = TRUE)
 
 
 
-# Seedling Density Regression 
+# Seedling Density Regression
+
+use bernoulli prior and constrain the priors
+
+prior1 <- prior("normal(0,1)", class = "b") +
+  prior("student_t(3, 0, 1)", class = "sds", coef = "s(transect_dist_m, by = Plot)")
+  # only 1 coef for this. t(3,0,1) is aki vehtarhi's favorite weakly informative prior.
+  I changed this from t(3, 0, 2.5)
+
+
+when no prior used, model cannot be fit, rhat ~1.04 and very low estimated sample size. This is probably because one or more of the predictors causes full separation of the outcome. See page 256 of Regression and other stories for more information.
+
 
 ```{r Seedling Density }
 
@@ -756,13 +861,13 @@ range(shrub_density_OBLS$prop.presence)
 
 shrub_density_OBLS <- seedling_data %>%
   filter(fac.obl == "OBL-S") %>% 
-   mutate(prop.presence= ifelse(prop.presence == 1, 0.999, prop.presence))
+   mutate(prop.presence= ifelse(prop.presence == 1, 0.999, prop.presence)) %>% 
+  mutate(presence = ifelse(presence >0, 1, presence))
 
 shrub_density_OBLS$year <- as.factor(shrub_density_OBLS$year)
+shrub_density_FAC$year <- as.factor(shrub_density_FAC$year)
 
-hist(shrub_density_OBLS$avg.count)
-hist(shrub_density_OBLS$prop.presence)
-plot(shrub_density_OBLS$num_burn, shrub_density_OBLS$prop.presence)
+plot(shrub_density_OBLS$num_burn, shrub_density_OBLS$presence)
 plot(shrub_density_OBLS$TSLF, shrub_density_OBLS$prop.presence)
 plot(shrub_density_OBLS$hli, shrub_density_OBLS$prop.presence)
 plot(shrub_density_OBLS$ppt, shrub_density_OBLS$prop.presence)
@@ -780,12 +885,27 @@ pairs(shrub_density_OBLS[,c("num_burn","TSLF",
                           "hli","slope",
                           "ppt","tmean","elevation")])
 
+ggplot(shrub_density_OBLS, aes(x=num_burn, y=presence,
+                               color=spp))+
+  geom_point()+
+  geom_jitter()
+
+ggplot(shrub_density_FAC, aes(x=num_burn, y=presence,
+                               color=spp))+
+  geom_point()+
+  geom_jitter()
+
+
+priors <- c(set_prior("normal(0,1)", class = "b"),
+            set_prior("student_t(3, 0, 1)", class = "Intercept"))
+  # only 1 coef for this. t(3,0,1) is aki vehtarhi's favorite weakly informative prior.
+ # I changed this from t(3, 0, 2.5)
+prior_summary(m.shrubDensityOBL)
 m.shrubDensityOBL <- brm(data = shrub_density_OBLS,
-                        bf(prop.presence ~ num_burn,
-                           phi ~ num_burn,
-                           zi ~ num_burn),
-                      family = zero_inflated_beta(),
-                      #control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      presence ~ 1 + num_burn,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
                       sample_prior = TRUE,
                       iter = 2000,
                       warmup = 1000, 
@@ -814,11 +934,10 @@ ggplot(pred, aes(x=num_burn, y=.epred))+
   theme(legend.position = "bottom")
 
 m.shrubDensityOBL2 <- brm(data = shrub_density_OBLS,
-                        bf(prop.presence ~ num_burn + year,
-                           phi ~ num_burn + year,
-                           zi ~ num_burn + year),
-                      family = zero_inflated_beta(),
-                      #control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      presence ~ 1 + num_burn * year,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
                       sample_prior = TRUE,
                       iter = 2000,
                       warmup = 1000, 
@@ -827,18 +946,32 @@ m.shrubDensityOBL2 <- brm(data = shrub_density_OBLS,
 save(m.shrubDensityOBL2, file = "models/shrubDensityOBL2.rda")
 load("models/shrubDensityOBL2.rda")
 
-summary(m.shrubDensityOBL2)
-conditional_effects(m.shrubDensityOBL2)
+summary(m.shrubDensityOBL2b)
+conditional_effects(m.shrubDensityOBL2b)
 plot(m.shrubDensityOBL2)
 pp_check(m.shrubDensityOBL2)
 bayes_R2(m.shrubDensityOBL2)
+loo(m.shrubDensityOBL,m.shrubDensityOBL2)
+
+
+m.shrubDensityOBL2b <- brm(data = shrub_density_OBLS,
+                      presence ~ 1 + num_burn + year,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
+                      sample_prior = TRUE,
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
+
+save(m.shrubDensityOBL2b, file = "models/shrubDensityOBL2b.rda")
+load("models/shrubDensityOBL2b.rda")
 
 m.shrubDensityOBL3 <- brm(data = shrub_density_OBLS,
-                        bf(prop.presence ~ num_burn + year + ppt + tmean + hli,
-                           phi ~ num_burn + year,
-                           zi ~ num_burn),
-                      family = zero_inflated_beta(),
-                      #control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      presence ~ 1 + num_burn + year + hli,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
                       sample_prior = TRUE,
                       iter = 2000,
                       warmup = 1000, 
@@ -852,12 +985,105 @@ conditional_effects(m.shrubDensityOBL3)
 plot(m.shrubDensityOBL3)
 pp_check(m.shrubDensityOBL3)
 bayes_R2(m.shrubDensityOBL3)
-loo(m.shrubDensityOBL, m.shrubDensityOBL2, m.shrubDensityOBL3)
+loo(m.shrubDensityOBL, m.shrubDensityOBL2b, m.shrubDensityOBL3)
 
 nd <- expand_grid(num_burn=seq(1,7,by=.1),
                   year=unique(shrub_density_OBLS$year))
 
-pred <- m.shrubDensityOBL2%>% 
+pred <- m.shrubDensityOBL2b%>% 
+    epred_draws(newdata = nd)
+
+head(pred)
+
+
+
+
+
+####### Facultative
+shrub_density_FAC <- seedling_data %>%
+  filter(fac.obl == "FAC") %>% 
+   mutate(prop.presence= ifelse(prop.presence == 1, 0.999, prop.presence)) %>% 
+  mutate(presence = ifelse(presence >0, 1, presence)) 
+
+unique(shrub_density_FAC$spp)
+shrub_density_FAC$year <- as.factor(shrub_density_FAC$year)
+
+m.shrubDensityFAC <- brm(data = shrub_density_FAC,
+                      presence ~ 1 + num_burn,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
+                      sample_prior = TRUE,
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
+
+save(m.shrubDensityFAC, file = "models/shrubDensityFAC.rda")
+load("models/shrubDensityFAC.rda")
+
+tidy(m.shrubDensityFAC, effects = "fixed")
+summary(m.shrubDensityFAC)
+conditional_effects(m.shrubDensityFAC)
+plot(m.shrubDensityFAC)
+pp_check(m.shrubDensityFAC)
+bayes_R2(m.shrubDensityFAC)
+
+pred <- m.shrubDensityFAC %>% 
+  epred_draws(newdata = expand_grid(num_burn=seq(1,7,by=.1)))
+pred
+
+ggplot(pred, aes(x=num_burn, y=.epred))+
+  stat_lineribbon()+
+  scale_fill_brewer(palette = "Blues")+
+  labs(x = "Fire frequency", 
+       y = "Predicted presence of facultative seeder",
+       fill = "Credible interval") +
+  theme(legend.position = "bottom")
+
+m.shrubDensityFAC2 <- brm(data = shrub_density_FAC,
+                      presence ~ 1 + num_burn + year,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
+                      sample_prior = TRUE,
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
+
+save(m.shrubDensityFAC2, file = "models/shrubDensityFAC2.rda")
+load("models/shrubDensityFAC2.rda")
+
+summary(m.shrubDensityFAC2)
+conditional_effects(m.shrubDensityFAC2)
+plot(m.shrubDensityFAC2)
+pp_check(m.shrubDensityFAC2)
+bayes_R2(m.shrubDensityFAC2)
+loo(m.shrubDensityFAC,m.shrubDensityFAC2)
+
+m.shrubDensityFAC3 <- brm(data = shrub_density_FAC,
+                      presence ~ 1 + num_burn + year + hli,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
+                      sample_prior = TRUE,
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
+
+save(m.shrubDensityFAC3, file = "models/shrubDensityFAC3.rda")
+load("models/shrubDensityFAC3.rda")
+
+summary(m.shrubDensityFAC3)
+conditional_effects(m.shrubDensityFAC3)
+plot(m.shrubDensityFAC3)
+pp_check(m.shrubDensityFAC3)
+bayes_R2(m.shrubDensityFAC3)
+loo(m.shrubDensityFAC,m.shrubDensityFAC2, m.shrubDensityFAC3)
+
+nd <- expand_grid(num_burn=seq(1,7,by=.1),
+                  year=unique(shrub_density_OBLS$year))
+
+pred <- m.shrubDensityFAC%>% 
     epred_draws(newdata = nd)
 
 head(pred)
@@ -866,81 +1092,160 @@ ggplot(pred, aes(x=num_burn, y=.epred))+
   stat_lineribbon()+
   scale_fill_brewer(palette = "Blues")+
   labs(x = "Fire frequency", 
-       y = "Predicted presence of obligate seeder",
+       y = "Predicted presence of facultative seeder",
        fill = "Credible interval") +
   theme(legend.position = "bottom")
 
+#ADFA ONLY
+shrub_density_ADFA <- seedling_data %>%
+  filter(spp == "ADFA") %>% 
+   mutate(prop.presence= ifelse(prop.presence == 1, 0.999, prop.presence)) %>% 
+  mutate(presence = ifelse(presence >0, 1, presence))
+shrub_density_3top$year <- as.factor(shrub_density_3top$year)
 
+
+m.shrubDensityADFA <- brm(data = shrub_density_ADFA,
+                      presence ~ 1 + num_burn + year,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
+                      sample_prior = TRUE,
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
+
+save(m.shrubDensityADFA, file = "models/shrubDensityADFA.rda")
+load("models/shrubDensityADFA.rda")
+
+summary(m.shrubDensityADFA)
+conditional_effects(m.shrubDensityADFA)
+
+unique(seedling_data$spp)
+shrub_density_ERICAL <- seedling_data %>%
+  filter(spp == "ERICAL") %>% 
+   mutate(prop.presence= ifelse(prop.presence == 1, 0.999, prop.presence)) %>% 
+  mutate(presence = ifelse(presence >0, 1, presence))
+shrub_density_ERICAL$year <- as.factor(shrub_density_ERICAL$year)
+
+plot(shrub_density_ERICAL$presence, shrub_density_ERICAL$num_burn)
+
+m.shrubDensityERCAL <- brm(data = shrub_density_ERICAL,
+                      presence ~ 1 + num_burn + year,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
+                      sample_prior = TRUE,
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
+
+save(m.shrubDensityERCAL, file = "models/shrubDensityERCAL.rda")
+load("models/shrubDensityERCAL.rda")
+
+summary(m.shrubDensityERCAL)
+conditional_effects(m.shrubDensityERCAL)
+
+shrub_density_LEPCAL <- seedling_data %>%
+  filter(spp == "LEPCAL") %>% 
+   mutate(prop.presence= ifelse(prop.presence == 1, 0.999, prop.presence)) %>% 
+  mutate(presence = ifelse(presence >0, 1, presence))
+shrub_density_LEPCAL$year <- as.factor(shrub_density_LEPCAL$year)
+
+
+m.shrubDensityLEPCAL <- brm(data = shrub_density_LEPCAL,
+                      presence ~ 1 + num_burn + year,
+                      family = bernoulli(),
+                      control = list(adapt_delta = 0.998, max_treedepth = 15),
+                      prior = priors,
+                      sample_prior = TRUE,
+                      iter = 2000,
+                      warmup = 1000, 
+                     cores = 4, chains = 4)
+
+save(m.shrubDensityLEPCAL, file = "models/shrubDensityLEPCAL.rda")
+load("models/shrubDensityLEPCAL.rda")
+summary(m.shrubDensityLEPCAL)
+conditional_effects(m.shrubDensityLEPCAL)
+
+nd <- expand_grid(num_burn=seq(1,7,by=.1),
+                  year=unique(shrub_density_OBLS$year))
+
+pred <- m.shrubDensityFAC%>% 
+    epred_draws(newdata = nd)
+pred_adfa <- m.shrubDensityADFA%>% 
+    epred_draws(newdata = nd) %>% 
+  mutate(spp = "ADFA")
+pred_ercal <- m.shrubDensityERCAL%>% 
+    epred_draws(newdata = nd) %>% 
+  mutate(spp = "ERCAL") 
+pred_lepcal <- m.shrubDensityLEPCAL%>% 
+    epred_draws(newdata = nd) %>% 
+  mutate(spp = "LEPCAL")
+
+pred_all <- rbind(pred_adfa, pred_ercal, pred_lepcal)
+
+ggplot(pred_all, aes(x=num_burn, y=.epred))+
+  stat_lineribbon()+
+  scale_fill_brewer(palette = "Blues")+
+  facet_grid(. ~ spp, space = "free_x", scales = "free_x")
+  labs(x = "Fire frequency", 
+       y = "Predicted presence of facultative seeder",
+       fill = "Credible interval") +
+  theme(legend.position = "bottom")
 
 ```
+
 
 # RANDOM FOREST - SHRUB DENSITY
 
 ```{r RF shrub den}
 
-
-#####DENSITY
-shrub_density_long <- read.csv("data/clean/LNU_subplot_shrub_density_long.csv")
-shrub_density_long <- left_join(shrub_density_long, plot.description_LNU, by="PlotID")
-shrub_density_long <- left_join(shrub_density_long, species.short, by ="spp")
-str(shrub_density_long)
-#make num_burn categorical
-shrub_density_long$num_burn <- as.factor(shrub_density_long$num_burn)
-shrub_density_long$preFireYear <- as.factor(shrub_density_long$preFireYear)
-shrub_density_long$mCC_FRI <- as.factor(shrub_density_long$mCC_FRI)
-shrub_density_long$aspect_name <- as.factor(shrub_density_long$aspect_name)
-shrub_density_long$TSLF <- as.factor(shrub_density_long$TSLF)
-shrub_density_long$spp <- as.factor(shrub_density_long$spp)
-shrub_density_long$Site <- as.factor(shrub_density_long$Site)
-
-
-#OBLIGATE SEEDERS
-shrub_density_OBLS <- shrub_density_long %>%
-  filter(PFR == "chaparral and serotinous conifer") %>% 
-  filter(avg.sum == "sum.count") %>% 
-  filter(seed.resp == "SEEDLING") %>% 
-  filter(fac.obl == "OBL-S") %>% 
-  filter(spp != "ACMGLA") %>% 
-  mutate(presence = case_when(
-    density == 0 ~ 0,
-    density > 0 ~ 1
-  ))
-
-unique(shrub_density_OBLS$spp)
-unique(shrub_density_OBLS$TSLF)
-unique(shrub_density_OBLS$presence)
-str(shrub_density_OBLS)
-
-shrub_density_OBLS$presence <- as.factor(shrub_density_OBLS$presence)
-
-OBLS_den_short <- shrub_density_OBLS %>% 
-  dplyr::select(presence, num_burn,
-                mCC_FRI, ppt, tmean, elevation, slope, aspect_name, hli, TSLF)
-str(OBLS_den_short)
-
 library(party)
 library(partykit)
 library(rpart)
 library(rpart.plot)
+
+shrub_seedling_data <- read.csv("data/clean/shrub_seedling_data_ALL.csv")
+
+seedling_data <- left_join(shrub_seedling_data, plot.description_LNU, by="PlotID")
+seedling_data <- left_join(seedling_data, species.short, by ="spp")
+
+str(LNU_cover_final)
+seedling_data$num_burn <- as.factor(seedling_data$num_burn)
+seedling_data$TSLF <- as.factor(seedling_data$TSLF)
+seedling_data$mCC_FRI <- as.factor(seedling_data$mCC_FRI)
+seedling_data$aspect_name <- as.factor(seedling_data$aspect_name)
+seedling_data$year <- as.factor(seedling_data$year)
+seedling_data$elevation <- as.numeric(seedling_data$elevation)
+seedling_data$crrnFRI <- as.factor(seedling_data$crrnFRI)
+seedling_data$cool_warm_slope <- as.factor(seedling_data$cool_warm_slope)
+seedling_data$Geology <- as.factor(seedling_data$Geology)
+str(seedling_data)
+
+shrub_density_OBLS <- seedling_data %>%
+  filter(fac.obl == "OBL-S") %>% 
+  filter(num_burn != "7") %>% 
+  dplyr::select(prop.presence, num_burn, TSLF, hli, cool_warm_slope, 
+         ppt, tmean, Geology, Distance_km)
+
 #run random forest model
 
-ctree1 <- ctree(presence ~ num_burn + elevation + aspect_name,
-                    data = OBLS_den_short,
-                    control = ctree_control(testtype = "Bonferroni"))
-ctree1
+ctree <- ctree(prop.presence ~ num_burn ,
+                data = shrub_density_OBLS)
+plot(ctree)
+
+ctree1 <- ctree(prop.presence ~ num_burn + 
+                  hli + cool_warm_slope + ppt +tmean,
+                    data = shrub_density_OBLS,
+                control = ctree_control(testtype = "Bonferroni"))
+
+dev.off()
+print(ctree1)
 plot(ctree1)
+
 varimp(ctree1)
+varimp(ctree1, conditional = TRUE)
 
-
-
-
-#Facultative seeders
-shrub_density_FAC <- shrub_density_long %>%
-  filter(seed.resp == "SEEDLING") %>% 
-  filter(fac.obl == "FAC") %>% 
-  filter(spp != "MIMAUR") %>% 
-    filter(spp != "HOLDIS") 
-unique(shrub_density_FAC$spp)
 
 
 ```
