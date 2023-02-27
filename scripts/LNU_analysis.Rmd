@@ -25,7 +25,10 @@ library(bayestestR)
 library(emmeans)
 library(calecopal)
 library(modelr)
+library(brmsmargins)
 library(ROCR) #calculate area under curve
+library(stringr) #str_detect
+library(forcats) #fct_rev
 
 library(broom)            # Convert model objects to data frames
 library(broom.mixed)   
@@ -503,14 +506,19 @@ ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred,
 final model beta binomial p(native cover) ~ 1 + num_burn + year 
 phi ~ 1+num_burn + year
 
+Step 1: run model with each potential predictor variable separately 
 Model comparisons:
-                        elpd_diff se_diff
-m.prop.cover.rich         0.0       0.0  
-m.prop.cover.rich_year   -6.8       6.3  
-m.prop.cover.rich_hli   -10.2       5.9  
-m.prop.cover.rich_ppt   -13.6       6.0  
-m.prop.cover.rich_tmean -14.0       7.3  
-m.prop.cover.rich_slope -14.5       6.5 
+                        elpd
+m.prop.cover.rich         19.9 
+m.prop.cover.rich_year   13.3
+m.prop.cover.rich_hli   9.7
+HLI values range from 0 (coolest) to 1 (hottest).
+m.prop.cover.rich_ppt   6.4
+m.prop.cover.rich_tmean 6
+m.prop.cover.rich_slope 5.4
+m.prop.cover.rich_TSLF. 26.8
+
+Calculated elpd - the expected log pointwise predictive density to figure out which predictors to add
 
 ```{r}
 LNU_cover_final <- read.csv("data/clean/LNU_speciesCover_FINAL.csv")
@@ -558,6 +566,9 @@ ggplot(LNU_cover_prop) +
   aes(x = "", y = cover) +
   geom_boxplot(fill = "#0c4c8a") +
   theme_minimal()
+
+#####
+######## run model with each predictor variable seperately 
 
 m.prop.cover.rich <- brm(
   bf(cover ~ 1 + num_burn, 
@@ -619,7 +630,19 @@ m.prop.cover.rich_slope <- brm(
   cores=4,
   seed = 1234)
 
-loo(m.prop.cover.rich, m.prop.cover.rich_year, 
+m.prop.cover.rich_TSLF <- brm(
+  bf(cover ~ 1 + TSLF, 
+     phi ~ TSLF),
+  data = LNU_cover_prop,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+str(LNU_cover_prop)
+
+loo(m.prop.cover.rich, 
+    m.prop.cover.rich_TSLF,
+    m.prop.cover.rich_year, 
     m.prop.cover.rich_hli, 
     m.prop.cover.rich_ppt, 
     m.prop.cover.rich_tmean, 
@@ -657,14 +680,14 @@ load("models/nativeCover_feb23_3.rda")
 
 summary(m.prop.cover.rich3)
 loo(m.prop.cover.rich, m.prop.cover.rich3)
-conditional_effects(m.prop.cover.rich3)
+plot(conditional_effects(m.prop.cover.rich3, points=T))
 plot(m.prop.cover.rich3)
 mcmc_plot(m.prop.cover.rich3)
 pp_check(m.prop.cover.rich3)
 bayes_R2(m.prop.cover.rich3)
 
 m.prop.cover.rich4 <- brm(
-  bf(cover ~ 1 + num_burn + year + hli + ppt + tmean, 
+  bf(cover ~ 1 + num_burn + year + hli, 
      phi ~ num_burn + year + hli),
   data = LNU_cover_prop,
   family = Beta(),
@@ -675,59 +698,110 @@ save(m.prop.cover.rich4, file= "models/nativeCover_feb23_4.rda")
 load("models/nativeCover_feb23_4.rda")
 
 summary(m.prop.cover.rich4)
-loo(m.prop.cover.rich, m.prop.cover.rich2)
+loo(m.prop.cover.rich, m.prop.cover.rich3, m.prop.cover.rich4)
 conditional_effects(m.prop.cover.rich4)
-bayes_R2(m.prop.cover.rich2)
+bayes_R2(m.prop.cover.rich4)
 mcmc_plot(m.prop.cover.rich4)
 
+
+#plot posterior predictive intervals
 range(LNU_cover_prop$hli)
-nd <- expand_grid(num_burn=unique(LNU_cover_prop$num_burn),
-                  year = unique(LNU_cover_prop$year))
 
-beta_bayes_pred <- m.prop.cover.rich%>% 
-    epred_draws(newdata = nd)  
-    group_by(num_burn, .draw) %>% 
-    dplyr::summarise(.epred = mean(.epred))
-
-head(beta_bayes_pred)
-
-ggplot(beta_bayes_pred, aes(x=num_burn, y=.epred))+
-  stat_lineribbon()+
-  scale_fill_brewer(palette = "Reds")+
-  labs(x = "Fire frequency", 
-       y = "Proportion of native species",
-       fill = "Credible interval") +
-  theme(legend.position = "bottom")
-
-nd <- expand_grid(num_burn=seq(1,7,by=.01),
-                  year = unique(LNU_cover_prop$year))
-fitted_prop <- fitted(m.prop.cover.rich,
-                 newdata = nd)
-head(fitted_prop)
-fitted_prop_sum <- fitted_prop %>% 
-  as.data.frame() 
-
-fitted_final <- cbind(fitted_prop_sum, nd)
-head(fitted_final)
-cal <- cal_palette("sierra1", n = 50, type = "continuous")
-
-ggplot(fitted_final, aes(x=num_burn))+
-  geom_smooth(aes(y = Estimate, 
-                  ymin = Q2.5, ymax = Q97.5),
-              stat = "identity", 
-              color = "#9999CC",
-              alpha = 1/4, size = 1/2)+
-  geom_point(aes(y = Estimate),
-             size = 2/3,
-             color = "#9999CC") +
-  labs(x = expression(italic("Fire frequency")),
-       y = expression(italic("Proportion of native species"))) +
-  scale_fill_gradientn(colours = cal) + 
+LNU_cover_prop %>% 
+  data_grid(num_burn=seq(1,7,by=.1),
+            year=c(2021, 2022)) %>% 
+  add_draws(posterior_epred(m.prop.cover.rich3, newdata= .)) %>% 
+  ggplot(aes(x=num_burn, y=cover))+
+  stat_lineribbon(aes(y=.value),alpha=.35,.width = c(.66, .95))+
+  geom_point(data=LNU_cover_prop , alpha=.2)+
+  geom_jitter(data=LNU_cover_prop, alpha =.2)+
+  facet_wrap(~year)+
+  labs(x="Fire Frequency", y= "Proportion of native species cover",
+       fill="credible interval")+
+  theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 13),
         axis.text.x = element_text(size = 10),
         legend.title = element_blank())
+
+#slope of line at average number of burns
+emtrends(m.prop.cover.rich3, ~ num_burn, var = "num_burn", 
+         at = list(num_burn = c(1:7)),
+         regrid = "response")
+ #num_burn num_burn.trend lower.HPD upper.HPD
+#     3.17        -0.0815    -0.113   -0.0505
+
+## OVERALL TREND 
+emtrends(m.prop.cover.rich3, ~ 1, var = "num_burn", 
+         regrid = "response")
+
+#AVERAGE MARGINAL EFFECT
+# emtrends()-based AMEs
+grand_mean_ame <- m.prop.cover.rich %>% 
+  emtrends(~ num_burn,
+           var = "num_burn",
+           at = list(num_burn = seq(1,5,by=1)),
+           regrid = "response") %>% 
+  gather_emmeans_draws()
+
+ggplot(grand_mean_ame,aes(x = .value / 10, 
+                      fill = factor(num_burn))) +
+  stat_halfeye(slab_alpha = 0.75) +
+ # scale_fill_manual() +
+  labs(x = "Average marginal effect of a\n increase in 1 fire recurrence",
+       y = "Proportion of native species", fill = "Fire Frequency") +
+  theme(legend.position = "bottom")
+
+ggplot(grand_mean_ame,aes(x = .value / 10)) +
+  stat_halfeye(slab_alpha = 0.75, 
+               point_interval = "median_hdi",
+               fill = "#0c4c8a") +
+  labs(x = "Average marginal effect of a\n increase in 1 fire recurrence",
+       y = "Proportion of native species", fill = "Fire Frequency") +
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
+
+
+#get adjusted means
+em <- emmeans(m.prop.cover.rich3,
+              ~ num_burn,
+              at = list(num_burn = seq(1,7,by=1)))
+em
+cont <- contrast(em, "tukey")
+cont
+#get the posterior draws from the contrasts
+cont_posterior <- gather_emmeans_draws(cont)
+cont_posterior
+#plot
+ggplot(cont_posterior,
+       aes(y = contrast, x = .value)) +
+  stat_halfeye()+
+ # facet_wrap(~num_burn) +
+  geom_vline(xintercept = 0, color = "red", lty = 2)
+
+
+posterior_beta <- m.prop.cover.rich %>% 
+  gather_draws(`b_.*`, regex = TRUE) %>% 
+  mutate(component = ifelse(str_detect(.variable, "phi_"), "Precision", "Mean"),
+         intercept = str_detect(.variable, "Intercept"))
+posterior_beta
+
+ggplot(posterior_beta, 
+       aes(x = .value, y = fct_rev(.variable), fill = component)) +
+  geom_vline(xintercept = 0) +
+  stat_halfeye(aes(slab_alpha = intercept), 
+               .width = c(0.8, 0.95), point_interval = "median_hdi") +
+  scale_fill_viridis_d(option = "viridis", end = 0.6) +
+  scale_slab_alpha_discrete(range = c(1, 0.4)) +
+  guides(fill = "none", slab_alpha = "none") +
+  labs(x = "Coefficient", y = "Variable",
+       caption = "80% and 95% credible intervals shown in black") +
+  facet_wrap(vars(component), ncol = 1, scales = "free_y") 
 
 
 ```
@@ -781,7 +855,7 @@ varimp(ctree1, conditional = TRUE)
 
 
 
-# Seedling Density Regression
+# Seedling Density Regression Obligate seeders
 
 use bernoulli prior and constrain the priors
 
@@ -794,7 +868,7 @@ prior1 <- prior("normal(0,1)", class = "b") +
 when no prior used, model cannot be fit, rhat ~1.04 and very low estimated sample size. This is probably because one or more of the predictors causes full separation of the outcome. See page 256 of Regression and other stories for more information.
 
 
-```{r Seedling Density }
+```{r Seedling Density OBLIGATE-S }
 
 
 #####DENSITY
@@ -842,11 +916,42 @@ shrub_density_sum <- seedling_data %>%
             se= sd/sqrt(n_obs))
 
 ggplot(shrub_density_sum, 
-       aes(x=as.factor(num_burn), y=mean_den, fill=as.factor(num_burn)))+
+       aes(x=as.factor(num_burn), y=mean_den, fill=fac.obl))+
   geom_bar(stat = "identity", position = position_dodge())+
-  geom_errorbar(aes(ymax=mean_den + se, ymin=mean_den-se), width=.2,
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  geom_errorbar(aes(ymax=mean_den + se, ymin=mean_den-se),
+                width=.2,
                 position=position_dodge(.9))+
-  facet_wrap(~fac.obl, scales = "free")
+  labs(x="Fire Frequency", y= "Average seedling density",
+       fill="")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
+
+shrub_density_sum <- seedling_data %>% 
+  filter(fac.obl == "FAC"|
+           fac.obl == "OBL-S") %>% 
+  group_by(num_burn, fac.obl, spp) %>% 
+  dplyr::summarise(mean_den = mean(avg.count),
+            max_den = max(avg.count),
+            min_den = min(avg.count),
+            n_obs = n(),
+            sd = sd(avg.count),
+            se= sd/sqrt(n_obs))
+
+ggplot(shrub_density_sum, 
+       aes(x=as.factor(num_burn), y=mean_den, fill=spp))+
+  geom_bar(stat = "identity")+
+  facet_wrap(~fac.obl)+
+   labs(x="Fire Frequency", y= "Average seedling density",
+       fill="")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
 
 hist(seedling_data$avg.count)
 hist(seedling_data$prop.presence)
@@ -890,11 +995,6 @@ ggplot(shrub_density_OBLS, aes(x=num_burn, y=presence,
   geom_point()+
   geom_jitter()
 
-ggplot(shrub_density_FAC, aes(x=num_burn, y=presence,
-                               color=spp))+
-  geom_point()+
-  geom_jitter()
-
 
 priors <- c(set_prior("normal(0,1)", class = "b"),
             set_prior("student_t(3, 0, 1)", class = "Intercept"))
@@ -921,18 +1021,6 @@ plot(m.shrubDensityOBL)
 pp_check(m.shrubDensityOBL)
 bayes_R2(m.shrubDensityOBL)
 
-pred <- m.shrubDensityOBL %>% 
-  epred_draws(newdata = expand_grid(num_burn=seq(1,7,by=.1)))
-pred
-
-ggplot(pred, aes(x=num_burn, y=.epred))+
-  stat_lineribbon()+
-  scale_fill_brewer(palette = "Blues")+
-  labs(x = "Fire frequency", 
-       y = "Predicted presence of obligate seeder",
-       fill = "Credible interval") +
-  theme(legend.position = "bottom")
-
 m.shrubDensityOBL2 <- brm(data = shrub_density_OBLS,
                       presence ~ 1 + num_burn * year,
                       family = bernoulli(),
@@ -950,8 +1038,8 @@ summary(m.shrubDensityOBL2b)
 conditional_effects(m.shrubDensityOBL2b)
 plot(m.shrubDensityOBL2)
 pp_check(m.shrubDensityOBL2)
-bayes_R2(m.shrubDensityOBL2)
-loo(m.shrubDensityOBL,m.shrubDensityOBL2)
+bayes_R2(m.shrubDensityOBL2b)
+loo(m.shrubDensityOBL,m.shrubDensityOBL2b)
 
 
 m.shrubDensityOBL2b <- brm(data = shrub_density_OBLS,
@@ -987,18 +1075,54 @@ pp_check(m.shrubDensityOBL3)
 bayes_R2(m.shrubDensityOBL3)
 loo(m.shrubDensityOBL, m.shrubDensityOBL2b, m.shrubDensityOBL3)
 
-nd <- expand_grid(num_burn=seq(1,7,by=.1),
-                  year=unique(shrub_density_OBLS$year))
 
-pred <- m.shrubDensityOBL2b%>% 
-    epred_draws(newdata = nd)
+pred <- m.shrubDensityOBL2b %>% 
+  epred_draws(newdata = expand_grid(num_burn=seq(1,7,by=.1),
+                                      year=c(2021, 2022)))
+pred
 
-head(pred)
+ggplot(pred, aes(x=num_burn, y=.epred))+
+  stat_lineribbon()+
+  scale_fill_brewer(palette = "Blues")+
+  labs(x = "Fire frequency", 
+       y = "Predicted presence of obligate seeder",
+       fill = "Credible interval") +
+  facet_wrap(~year)+
+  theme(legend.position = "bottom")+
+    theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
+
+
+shrub_density_OBLS %>% 
+  data_grid(num_burn=seq(1,7,by=.1),
+            year=c(2021, 2022)) %>% 
+  add_draws(posterior_epred(m.shrubDensityOBL2b, newdata= .)) %>% 
+  ggplot(aes(x=num_burn, y=presence))+
+  stat_lineribbon(aes(y=.value),.width = c(.66, .95))+
+  #geom_point(data=shrub_density_OBLS , alpha=.2)+
+  #geom_jitter(data=shrub_density_OBLS, alpha =.2)+
+  scale_fill_brewer(palette = "Blues")+
+  facet_wrap(~year)+
+  labs(x="Fire Frequency", y= "Presence of obligate seeder",
+       fill="credible interval")+
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
 
 
 
 
+```
 
+# Shrub density FACULTATIVE
+
+```{r}
 ####### Facultative
 shrub_density_FAC <- seedling_data %>%
   filter(fac.obl == "FAC") %>% 
@@ -1007,6 +1131,10 @@ shrub_density_FAC <- seedling_data %>%
 
 unique(shrub_density_FAC$spp)
 shrub_density_FAC$year <- as.factor(shrub_density_FAC$year)
+ggplot(shrub_density_FAC, aes(x=num_burn, y=presence,
+                               color=spp))+
+  geom_point()+
+  geom_jitter()
 
 m.shrubDensityFAC <- brm(data = shrub_density_FAC,
                       presence ~ 1 + num_burn,
@@ -1083,7 +1211,7 @@ loo(m.shrubDensityFAC,m.shrubDensityFAC2, m.shrubDensityFAC3)
 nd <- expand_grid(num_burn=seq(1,7,by=.1),
                   year=unique(shrub_density_OBLS$year))
 
-pred <- m.shrubDensityFAC%>% 
+pred <- m.shrubDensityFAC2%>% 
     epred_draws(newdata = nd)
 
 head(pred)
@@ -1094,8 +1222,20 @@ ggplot(pred, aes(x=num_burn, y=.epred))+
   labs(x = "Fire frequency", 
        y = "Predicted presence of facultative seeder",
        fill = "Credible interval") +
-  theme(legend.position = "bottom")
+    facet_wrap(~year)+
+  theme(legend.position = "bottom")+
+    theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank())
 
+
+```
+
+# shrub density by individual FAC spp
+
+```{r}
 #ADFA ONLY
 shrub_density_ADFA <- seedling_data %>%
   filter(spp == "ADFA") %>% 
@@ -1119,6 +1259,7 @@ load("models/shrubDensityADFA.rda")
 
 summary(m.shrubDensityADFA)
 conditional_effects(m.shrubDensityADFA)
+bayes_R2(m.shrubDensityADFA)
 
 unique(seedling_data$spp)
 shrub_density_ERICAL <- seedling_data %>%
@@ -1187,12 +1328,13 @@ pred_all <- rbind(pred_adfa, pred_ercal, pred_lepcal)
 ggplot(pred_all, aes(x=num_burn, y=.epred))+
   stat_lineribbon()+
   scale_fill_brewer(palette = "Blues")+
-  facet_grid(. ~ spp, space = "free_x", scales = "free_x")
+  facet_grid(spp~year, 
+             space = "free_x", scales = "free_x")+
   labs(x = "Fire frequency", 
        y = "Predicted presence of facultative seeder",
        fill = "Credible interval") +
   theme(legend.position = "bottom")
-
+  
 ```
 
 
