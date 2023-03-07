@@ -509,7 +509,7 @@ phi ~ 1+num_burn + year
 Step 1: run model with each potential predictor variable separately 
 Model comparisons:
                         elpd
-m.prop.cover.rich         19.9 
+m.prop.cover.rich_num Burn  19.9 
 m.prop.cover.rich_year   13.3
 m.prop.cover.rich_hli   9.7
 HLI values range from 0 (coolest) to 1 (hottest).
@@ -534,6 +534,16 @@ LNU_cover_final$crrnFRI <- as.factor(LNU_cover_final$crrnFRI)
 LNU_cover_final$cool_warm_slope <- as.factor(LNU_cover_final$cool_warm_slope)
 LNU_cover_final$Geology <- as.factor(LNU_cover_final$Geology)
 
+
+#CENTER AND SCALE COVARIATES
+LNU_cover_final$ppt.scale <- scale(LNU_cover_final$ppt, center = TRUE, scale = TRUE)
+LNU_cover_final$tmean.scale <- scale(LNU_cover_final$tmean, center = TRUE, scale = TRUE)
+LNU_cover_final$hli.scale <- scale(LNU_cover_final$hli, center = TRUE, scale = TRUE)
+LNU_cover_final$slope.scale <- scale(LNU_cover_final$slope, center = TRUE, scale = TRUE)
+LNU_cover_final$elevation.scale <- scale(LNU_cover_final$elevation, center = TRUE, scale = TRUE)
+
+str(LNU_cover_final)
+
 unique(LNU_cover_final$native.nonnative.prop)
 LNU_cover_prop <- LNU_cover_final %>% 
   filter(native.nonnative.prop == "prop_native_cover") %>% 
@@ -548,11 +558,14 @@ ggplot(LNU_cover_prop, aes(x=cool_warm_slope, y=cover))+
 hist(LNU_cover_prop$cover)
 range(LNU_cover_prop$cover)
 
+#CENTER AND SCALE DATA
+
+
 plot(LNU_cover_prop$num_burn, LNU_cover_prop$cover)
 plot(LNU_cover_prop$TSLF, LNU_cover_prop$cover)
-plot(LNU_cover_prop$ppt, LNU_cover_prop$cover)
-plot(LNU_cover_prop$tmean, LNU_cover_prop$cover)
-plot(LNU_cover_prop$hli, LNU_cover_prop$cover)
+plot(LNU_cover_prop$ppt.scale, LNU_cover_prop$cover)
+plot(LNU_cover_prop$tmean.scale, LNU_cover_prop$cover)
+plot(LNU_cover_prop$hli.scale, LNU_cover_prop$cover)
 plot(LNU_cover_prop$aspect_name, LNU_cover_prop$cover)
 plot(LNU_cover_prop$cool_warm_slope, LNU_cover_prop$cover)
 plot(LNU_cover_prop$mCC_FRI, LNU_cover_prop$cover)
@@ -677,6 +690,9 @@ m.prop.cover.rich3 <- brm(
   seed = 1234)
 save(m.prop.cover.rich3, file= "models/nativeCover_feb23_3.rda")
 load("models/nativeCover_feb23_3.rda")
+
+stancode(m.prop.cover.rich3)
+brms::prior_summary(m.prop.cover.rich3)
 
 summary(m.prop.cover.rich3)
 loo(m.prop.cover.rich, m.prop.cover.rich3)
@@ -1055,6 +1071,8 @@ m.shrubDensityOBL2b <- brm(data = shrub_density_OBLS,
 save(m.shrubDensityOBL2b, file = "models/shrubDensityOBL2b.rda")
 load("models/shrubDensityOBL2b.rda")
 
+
+
 m.shrubDensityOBL3 <- brm(data = shrub_density_OBLS,
                       presence ~ 1 + num_burn + year + hli,
                       family = bernoulli(),
@@ -1325,15 +1343,21 @@ pred_lepcal <- m.shrubDensityLEPCAL%>%
 
 pred_all <- rbind(pred_adfa, pred_ercal, pred_lepcal)
 
-ggplot(pred_all, aes(x=num_burn, y=.epred))+
-  stat_lineribbon()+
-  scale_fill_brewer(palette = "Blues")+
-  facet_grid(spp~year, 
-             space = "free_x", scales = "free_x")+
+ggplot(pred_all, aes(x=num_burn, y=.epred, fill=spp))+
+  stat_lineribbon(alpha=.5)+
+  #scale_fill_brewer(palette = "Blues")+
+   scale_fill_manual(values = cal_palette("chaparral1")) +
+  facet_grid(spp~year, space = "free_x", scales = "free_x")+
   labs(x = "Fire frequency", 
        y = "Predicted presence of facultative seeder",
        fill = "Credible interval") +
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom")+
+   theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 13),
+        axis.text.x = element_text(size = 10),
+        legend.title = element_blank(),
+        legend.position = "none")
   
 ```
 
