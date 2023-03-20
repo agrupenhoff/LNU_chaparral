@@ -286,7 +286,7 @@ propnativeRich <- LNU_richness %>%
   dplyr::rename(prop_native_rich = richness)
 
 str(propnativeRich)
-propnativeRich$num_burn <- as.factor(propnativeRich$num_burn)
+propnativeRich$num_burn <- as.numeric(propnativeRich$num_burn)
 propnativeRich$TSLF <- as.factor(propnativeRich$TSLF)
 propnativeRich$mCC_FRI <- as.factor(propnativeRich$mCC_FRI)
 propnativeRich$aspect_name <- as.factor(propnativeRich$aspect_name)
@@ -382,8 +382,8 @@ ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = num_burn)) +
 
 
 m.propnatRich2 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn * year, 
-     phi ~ num_burn * year),
+  bf(prop_native_rich ~ 1 + num_burn + year, 
+     phi ~ num_burn + year),
   data = propnativeRich_small,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
@@ -399,7 +399,7 @@ pp_check(m.propnatRich2)
 plot(m.propnatRich2)
 bayes_R2(m.propnatRich2)
 # Plug a dataset where quota is FALSE and TRUE into the model
-beta_bayes_pred <- m.propnatRich2b %>% 
+beta_bayes_pred <- m.propnatRich2 %>% 
   epred_draws(newdata = expand_grid(num_burn = unique(propnativeRich$num_burn),
                                     year = unique(propnativeRich$year))) 
 
@@ -412,19 +412,7 @@ ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = year)) +
   labs(y = "Predicted proportion of native species", x = NULL,
        caption = "80% and 95% credible intervals shown in black")
 
-m.propnatRich2b <- brm(
-  bf(prop_native_rich ~ 1 + num_burn + year, 
-     phi ~ num_burn + year),
-  data = propnativeRich_small,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.propnatRich2b, file = "models/nativeRich2b_feb23.rda")
-#load("models/nativeRich2_feb23.rda")
-loo(m.propnatRich2, m.propnatRich2b)
-summary(m.propnatRich2b)
-conditional_effects(m.propnatRich2b)
+
 
 m.propnatRich3 <- brm(
   bf(prop_native_rich ~ 1 + num_burn * year + hli, 
@@ -477,25 +465,24 @@ conditional_effects(m.propnatRich4)
 bayes_R2(m.propnatRich4)
 
 # Plug a dataset where quota is FALSE and TRUE into the model
-range(propnativeRich_small$hli)
-range(propnativeRich_small$ppt)
-beta_bayes_pred <- m.propnatRich4 %>% 
-    epred_draws(newdata = expand_grid(num_burn = unique(propnativeRich$num_burn),
-                                    year = unique(propnativeRich$year),
-                                    hli = c(.3:1),
-                                    ppt = c(700))) 
-head(beta_bayes_pred)
-
-
-
-ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, 
-                            color = num_burn)) +
-  stat_pointinterval(position = position_dodge(width = .4),
-                                 .width = c(0.95))+
- # stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
-  scale_color_manual(values = cal_palette("sierra1")) +
-  labs(x = "Predicted proportion of native species (richness)", y = NULL,
-       caption = "80% and 95% credible intervals shown in black")
+propnativeRich_small %>% 
+  data_grid(num_burn=seq(1,7,by=.1),
+            year=c(2021, 2022)) %>% 
+  add_draws(posterior_epred(m.propnatRich2, newdata= .)) %>% 
+  ggplot(aes(x=num_burn, y=prop_native_rich))+
+  stat_lineribbon(aes(y=.value),alpha=.35,.width = c(.66, .95))+
+  geom_point(data=propnativeRich_small , alpha=.2)+
+  geom_jitter(data=propnativeRich_small, alpha =.2)+
+  facet_wrap(~year)+
+  labs(x="Fire Frequency", y= "Proportion Native richness",
+       fill="credible interval")+
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank())
 
 
 
@@ -732,13 +719,14 @@ LNU_cover_prop %>%
   geom_point(data=LNU_cover_prop , alpha=.2)+
   geom_jitter(data=LNU_cover_prop, alpha =.2)+
   facet_wrap(~year)+
-  labs(x="Fire Frequency", y= "Proportion of native species cover",
+  labs(x="Fire Frequency", y= "Proportion Native Cover",
        fill="credible interval")+
   theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
         legend.title = element_blank())
 
 #slope of line at average number of burns
