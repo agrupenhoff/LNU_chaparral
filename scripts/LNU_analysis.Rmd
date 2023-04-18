@@ -70,7 +70,8 @@ severity_LNU_clean <- severity_LNU %>%
   dplyr::summarise(mean_diam_mm = mean(Mean_diam),
             sd = sd(Mean_diam),
             n_obs = n(),
-            se = sd/sqrt(n_obs))
+            se = sd/sqrt(n_obs),
+            max_diam_mm = max(Mean_diam))
 
 severity.plotdescription.LNU <- left_join(severity_LNU_clean, 
                                           plot.description_LNU, by="PlotID")
@@ -81,7 +82,14 @@ sevdata <- ddply(severity.plotdescription.LNU, c("num_burn"),
                  N = sum(!is.na(mean_diam_mm)),
                  mean_diam_mm_avg = mean(mean_diam_mm, na.rm=TRUE),
                  sd= sd(mean_diam_mm, na.rm = TRUE),
-                 se = sd/sqrt(N)) 
+                 se = sd/sqrt(N),
+                 cv = 100*sd/mean_diam_mm_avg,
+                 
+                 max = mean(max_diam_mm, na.rm = TRUE),
+                 sd_max = sd(max_diam_mm, na.rm = TRUE),
+                 se_max = sd_max/sqrt(N),
+                 cv_max = 100*sd_max/max
+                 ) 
 
 
 ggplot(data=sevdata %>%  
@@ -117,52 +125,123 @@ plot(m.sev)
 
 ```
 
+# Ground cover data
+
+```{r}
+
+str(GroundCover_LNU)
+GroundCover_LNU$Litter_depth_cm <- as.numeric(GroundCover_LNU$Litter_depth_cm)
+GroundCover_LNU$SH_ht_cm <- as.numeric(GroundCover_LNU$SH_ht_cm)
+GroundCover_LNU$year <- as.factor(GroundCover_LNU$year)
+
+groundcover_LNU <- left_join(GroundCover_LNU, 
+                              plot.description_LNU, by="PlotID")
+
+groundcover_LNU_clean <- groundcover_LNU %>% 
+  select(PlotID, year, num_burn, rock_percent, BG_percent, litter_percent,
+         Litter_depth_cm, SH_cover_percent, SH_ht_cm, HB_cover_percent) %>% 
+  group_by(num_burn, year) %>% 
+  dplyr::summarise_if(is.numeric, 
+                      funs(mean(., na.rm=T), 
+                           n = sum(!is.na(.)), 
+                           se = sd(., na.rm=T)/sqrt(sum(!is.na(.))))) 
+  
+ggplot(data=groundcover_LNU_clean,
+       aes(x=num_burn, y=HB_cover_percent_mean))+
+  geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))+
+  #geom_errorbar(aes(ymin=litter_percent_mean - litter_percent_se, 
+  #                  ymax=litter_percent_mean + litter_percent_se), 
+  #                width=.1, linewidth=.7)+
+  facet_wrap(~year)+
+  #geom_point(size=3, aes(colour=factor(num_burn)))+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  #                   xlab("Fire frequency")+
+  #                   ylab("Rock  %")+
+             
+                   theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 16),
+                          panel.grid = element_blank())
+
+
+```
 
 
 # NMDS
-xxxxxxxxx
-This file is not up to date
-xxxxxxxxxxx
+
+Updated april 17, 2023
 
 ```{r}
 library(vegan)
 
-load(file = "data/clean/LNU_subplot_wide_species.RData")
+LNU_combine_wide <- read.csv("data/clean/LNU_species_all_wide.csv")
 
 #make community matrix on which to base ordination
-LNUspecies = LNU_subplot_wide %>% select(!PlotID)
+LNUspecies = LNU_combine_wide %>% select(!c("plot_year","X")) 
+
 #columns that contain descriptive data
-LNUplot_ord = LNU_subplot_wide %>% 
-  select(PlotID) 
+LNUplot_ord = LNU_combine_wide %>% 
+  select(plot_year) %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+plot.description.short <- plot.description_LNU %>% 
+  select(PlotID, num_burn, ppt, tmean, hli, cool_warm_slope, TSLF)
+
 LNUplot_env <- left_join(LNUplot_ord, plot.description.short %>% distinct(), by = "PlotID")
 
 set.seed(123) #reproduce same results
-NMDS <- metaMDS(LNUspecies, distance="bray", k=2) #no transformation of species data is made here prior to bray curtis dissimilarities being calculated. 
+NMDS <- metaMDS(LNUspecies, distance="bray", k=3) #no transformation of species data is made here prior to bray curtis dissimilarities being calculated. 
 NMDS
+
+LNU.envfit <- envfit(NMDS, LNUplot_env, permutations = 999) # this fits environmental vectors
+
 
 #env.fit
 nmds_plot <- cbind(NMDS$point, LNUplot_env)
-nmds_species <- left_join(cbind(as.data.frame(NMDS$species), 
-                                as.data.frame(row.names(as.data.frame(NMDS$species)))), 
-                               # %>% rename(spp = "row.names(as.data.frame(NMDS$species))")
-                                species.short, by = c("row.names(as.data.frame(NMDS$species))"="spp" ))
-
+nmds_species <- cbind(as.data.frame(NMDS$species), 
+                      as.data.frame(row.names(as.data.frame(NMDS$species)))) %>% 
+                       dplyr::rename(spp = "row.names(as.data.frame(NMDS$species))")
+nmds_species <- left_join(nmds_species, species.short, by = "spp")
 nmds_plot$num_burn <- as.factor(nmds_plot$num_burn)
 
-ggplot(nmds_plot %>% filter(num_burn != "7"), aes(x=MDS1, y=MDS2))+
-  geom_point(size = 4, aes(x=MDS1, y=MDS2, color = num_burn))+
+
+#significant species 
+LNU.spp.fit <- envfit(NMDS, LNUspecies, permutations = 999 )
+spp.scrs <- as.data.frame(scores(LNU.spp.fit, display = "vectors")) 
+          #save species intrinsic values into dataframe
+spp.scrs <- cbind(spp.scrs, Species = rownames(spp.scrs)) 
+          #add species names to dataframe
+spp.scrs <- cbind(spp.scrs, pval = LNU.spp.fit$vectors$pvals) 
+            #add pvalues to dataframe so you can select species which are significant
+sig.spp.scrs <- subset(spp.scrs, pval<=0.05) #subset data to show species significant at 0.05
+
+head(spp.scrs)
+
+
+ggplot(nmds_plot, aes(x=MDS1, y=MDS2))+
+ geom_point(size = 4, aes(x=MDS1, y=MDS2, color = num_burn))+
+  geom_segment(data = sig.spp.scrs, 
+               aes(x = 0, xend=NMDS1, y=0, yend=NMDS2), 
+               arrow = arrow(length = unit(0.25, "cm")), 
+               colour = "grey10", lwd=0.3) +
+  #add vector arrows of significant species
+   ggrepel::geom_text_repel(data = sig.spp.scrs, 
+                            aes(x=NMDS1, y=NMDS2, label = Species), 
+                            cex = 3, direction = "both", segment.size = 0.25)+ 
+  #add labels for species, use ggrepel::geom_text_repel so that labels do not overlap
   #geom_point(data= nmds_species, size = 1.8, alpha = 0.5, aes(x=MDS1, y=MDS2, 
-  #                                               shape = Native_nonnative))
+  #                                               shape = Native_nonnative))+
   stat_ellipse(aes(x=MDS1, y=MDS2, color = num_burn))+
-  scale_color_viridis_d()+
+  scale_color_viridis_d(option = "magma")+
   guides(col=guide_legend("Fire Frequency"))+
   theme(axis.text = element_text(size=15),
         text = element_text(size = 16),
         panel.grid = element_blank(),
         legend.text = element_text(size=12),
         legend.title = element_text(size=11))
-ggsave(file="figures/NMDS.svg", width = 5, height = 3)
-ggsave(file="figures/NMDS.png", width = 5, height = 3)
+
+ggsave(file="figures/NMDS.svg", width = 10, height = 6)
+ggsave(file="figures/NMDS.png", width = 10, height = 6)
 
 
 
@@ -190,26 +269,37 @@ LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
 
 LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_yr_quad")
 
-LNU_richness_proportion <- LNU_richness %>% 
+LNU_richness_proportion_5m2 <- LNU_richness %>% 
   mutate_if(is.numeric, ~replace_na(.,0)) %>% 
   mutate(prop.native = (NATIVE_RICHNESS/(NATIVE_RICHNESS + NONNATIVE_RICHNESS))) %>% 
   separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
   group_by(plot_year) %>% 
   dplyr::summarise(mean_native_rich = mean(NATIVE_RICHNESS),
             mean_nonnative_rich = mean(NONNATIVE_RICHNESS),
-            mean_propNative = mean(prop.native))
-  
-
-LNU_richness_final <- LNU_richness_proportion %>% 
+            mean_propNative = mean(prop.native),
+            sum_native_rich = sum(NATIVE_RICHNESS),
+            sum_nonnative_rich = sum(NONNATIVE_RICHNESS),
+            sum_propNative = sum(prop.native)) %>% 
   pivot_longer(!plot_year,
                names_to = "native.nonnative.prop",
                values_to = "richness") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
-LNU_richness_final <- left_join(LNU_richness_final, plot.description_LNU, by="PlotID")
+LNU_richness_proportion_1m2 <- LNU_richness %>% 
+  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
+  mutate(prop.native = (NATIVE_RICHNESS/(NATIVE_RICHNESS + NONNATIVE_RICHNESS))) %>% 
+  pivot_longer(!plot_yr_quad,
+               names_to = "native.nonnative.prop",
+               values_to = "richness") %>% 
+    separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+LNU_richness_final_5m2 <- left_join(LNU_richness_proportion_5m2, plot.description_LNU, by="PlotID")
+LNU_richness_final_1m2 <- left_join(LNU_richness_proportion_1m2, plot.description_LNU, by="PlotID")
 
 
-write_csv(LNU_richness_final, "data/clean/LNU_subplot_RICHNESS.csv")
+write.csv(LNU_richness_final_5m2, "data/clean/LNU_subplot_RICHNESS_5m2.csv")
+write.csv(LNU_richness_final_1m2, "data/clean/LNU_subplot_RICHNESS_1m2.csv")
             
 ```
 
@@ -250,11 +340,10 @@ LNU_cover_clean <- LNU_cover %>%
                values_to = "cover") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
-plot(LNU_cover_clean$prop_native_cover)
 
 LNU_cover_final <- left_join(LNU_cover_clean, plot.description_LNU, by="PlotID")
 
-write_csv(LNU_cover_final, "data/clean/LNU_speciesCover_FINAL.csv")
+write.csv(LNU_cover_final, "data/clean/LNU_speciesCover_FINAL.csv")
 
 str(LNU_cover_final)
 LNU_cover_final$num_burn <- as.factor(LNU_cover_final$num_burn)
@@ -272,96 +361,172 @@ LNU_cover_final %>%
 ```
 
 
-# model richness regression 
+# model richness regression 5m2 
+
+For mean of all 5 1m2 quads per plot. 
+
+Step 1: run model with each potential predictor variable separately 
+Model comparisons:
+                        elpd
+year   32.9
+num Burn  23.9
+cool warm slope 22.3
+hli   19.8
+        HLI values range from 0 (coolest) to 1 (hottest).
+ppt   18
+tmean 4.6
+
+Calculated elpd - the expected log pointwise predictive density to figure out which predictors to add
+
+BEST MODEL =
+m.propnatRich3 <- brm(
+  bf(prop_native_rich ~ 1 + num_burn + year + cool_warm_slope, 
+     phi ~ num_burn + year + cool_warm_slope))
 
 ```{r regression RICH}
 
 
-LNU_richness <- read.csv("data/clean/LNU_subplot_RICHNESS.csv")
+LNU_richness_5m2 <- read.csv("data/clean/LNU_subplot_RICHNESS_5m2.csv")
+LNU_richness_1m2 <- read.csv("data/clean/LNU_subplot_RICHNESS_1m2.csv")
 
-propnativeRich <- LNU_richness %>% 
+propnativeRich_1m2 <- LNU_richness_1m2 %>% 
+  filter(native.nonnative.prop == "prop.native")  %>% 
+  filter(PFR != "oak woodland") %>% 
+  dplyr::rename(prop_native_rich = richness)
+
+propnativeRich_5m2 <- LNU_richness_5m2 %>% 
   filter(native.nonnative.prop == "mean_propNative")  %>% 
   filter(PFR != "oak woodland") %>% 
- # filter(Site != "CacheCreek") %>% 
   dplyr::rename(prop_native_rich = richness)
 
 str(propnativeRich)
-propnativeRich$num_burn <- as.numeric(propnativeRich$num_burn)
-propnativeRich$TSLF <- as.factor(propnativeRich$TSLF)
-propnativeRich$mCC_FRI <- as.factor(propnativeRich$mCC_FRI)
-propnativeRich$aspect_name <- as.factor(propnativeRich$aspect_name)
-propnativeRich$year <- as.factor(propnativeRich$year)
-propnativeRich$elevation <- as.numeric(propnativeRich$elevation)
-propnativeRich$crrnFRI <- as.factor(propnativeRich$crrnFRI)
-propnativeRich$cool_warm_slope <- as.factor(propnativeRich$cool_warm_slope)
-propnativeRich$Geology <- as.factor(propnativeRich$Geology)
+propnativeRich_1m2$num_burn <- as.numeric(propnativeRich_1m2$num_burn)
+propnativeRich_5m2$num_burn <- as.numeric(propnativeRich_5m2$num_burn)
+propnativeRich_1m2$year <- as.factor(propnativeRich_1m2$year)
+propnativeRich_5m2$year <- as.factor(propnativeRich_5m2$year)
+propnativeRich_1m2$elevation <- as.numeric(propnativeRich_1m2$elevation)
+propnativeRich_5m2$elevation <- as.numeric(propnativeRich_5m2$elevation)
+propnativeRich_1m2$cool_warm_slope <- as.factor(propnativeRich_1m2$cool_warm_slope)
+propnativeRich_5m2$cool_warm_slope <- as.factor(propnativeRich_5m2$cool_warm_slope)
 
-
-
-str(LNU_richness)
-unique(LNU_richness$native.nonnative.prop)
 
 ##BAYESIAN
 #repeated measures looking at richness based on different fire frequencies 
 
-ggplot(propnativeRich, aes(x=num_burn, y=prop_native_rich,
-                           fill = cool_warm_slope))+
-  geom_boxplot()
-ggplot(propnativeRich, aes(x=num_burn, y=prop_native_rich,
-                           color = hli))+
+ggplot(propnativeRich_1m2, 
+       aes(x=num_burn, y=prop_native_rich,
+                           color = cool_warm_slope))+
   geom_point()
 
-str(propnativeRich)
-propnativeRich$num_burn <- as.factor(propnativeRich$num_burn)
+ggplot(propnativeRich_5m2, 
+       aes(x=num_burn, y=prop_native_rich,
+                           color = cool_warm_slope))+
+  geom_point()
 
-propnativeRich_small <- propnativeRich %>% 
+
+propnativeRich_small_1m2 <- propnativeRich_1m2 %>% 
   dplyr::select(prop_native_rich, year, Site, num_burn, mCC_FRI, TSLF,
          ppt, tmean, elevation, slope, Distance_km, hli,
          Geology, aspect_name, cool_warm_slope) %>% 
   #can't have exactly 0 or 1
   mutate(prop_native_rich = ifelse(prop_native_rich == 1, 0.999, prop_native_rich))
 
-range(propnativeRich_small$prop_native_rich)
+propnativeRich_small_5m2 <- propnativeRich_5m2 %>% 
+  dplyr::select(prop_native_rich, year, Site, num_burn, mCC_FRI, TSLF,
+         ppt, tmean, elevation, slope, Distance_km, hli,
+         Geology, aspect_name, cool_warm_slope) %>% 
+  #can't have exactly 0 or 1
+  mutate(prop_native_rich = ifelse(prop_native_rich == 1, 0.999, prop_native_rich))
+
+
+range(propnativeRich_small_1m2$prop_native_rich)
 #check if covariates are correlated
-hist(propnativeRich$prop_native_rich)
-plot(propnativeRich$ppt, propnativeRich$tmean)
-plot(propnativeRich$ppt, propnativeRich$hli)
-plot(propnativeRich$tmean, propnativeRich$hli)
-plot(propnativeRich$TSLF, propnativeRich$num_burn)
-plot(propnativeRich$hli, propnativeRich$aspect_name)
-plot(propnativeRich$crrnFRI, propnativeRich$num_burn)
-plot(propnativeRich$num_burn, propnativeRich$prop_native_rich)
-plot(propnativeRich$TSLF, propnativeRich$prop_native_rich)
-plot(propnativeRich$ppt, propnativeRich$prop_native_rich)
-plot(propnativeRich$cool_warm_slope, propnativeRich$prop_native_rich)
-plot(propnativeRich$prop_native_rich)
+hist(propnativeRich_1m2$prop_native_rich)
+str(propnativeRich_small_1m2)
+data_1m2 <- propnativeRich_small_1m2[ , c("ppt", "tmean", "elevation", "slope", "hli")]
+cor(data_1m2) #this looks good!!
 
-str(propnativeRich_small)
-data <- propnativeRich_small[ , c("ppt", "tmean", "elevation", "slope", "hli")]
-cor(data) #this looks good!!
-
-#determine outliers 
-min(propnativeRich_small$prop_native_rich) #0.217
-max(propnativeRich_small$prop_native_rich) #1
-mean(propnativeRich_small$prop_native_rich) #0.52
-ggplot(propnativeRich_small) +
-  aes(x = "", y = prop_native_rich) +
-  geom_boxplot(fill = "#0c4c8a") +
-  theme_minimal()
-
-hist(propnativeRich$prop_native_rich)
+hist(propnativeRich_small_5m2$prop_native_rich)
+str(propnativeRich_small_5m2)
+data_5m2 <- propnativeRich_small_5m2[ , c("ppt", "tmean", "elevation", "slope", "hli")]
+cor(data_5m2) #this looks good!!
 
 
+######## run model with each predictor variable seperately 
 m.propnatRich <- brm(
   bf(prop_native_rich ~ 1 + num_burn, 
      phi ~ num_burn),
-  data = propnativeRich_small,
+  data = propnativeRich_small_5m2,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-save(m.propnatRich, file= "models/nativeRich_feb23.rda")
-load("models/nativeRich_feb23.rda")
+save(m.propnatRich, file= "models/nativeRich_numburn_5m2.rda")
+load("models/nativeRich_numburn_5m2.rda")
+summary(m.propnatRich)
+
+m.propnatRich_year <- brm(
+  bf(prop_native_rich ~ 1 + year, 
+     phi ~ year),
+  data = propnativeRich_small_5m2,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatRich_year, file= "models/nativeRich_year_5m2.rda")
+load("models/nativeRich_year_5m2.rda")
+
+m.propnatRich_ppt <- brm(
+  bf(prop_native_rich ~ 1 + ppt, 
+     phi ~ ppt),
+  data = propnativeRich_small_5m2,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatRich_ppt, file= "models/nativeRich_ppt_5m2.rda")
+load("models/nativeRich_ppt_5m2.rda")
+
+m.propnatRich_tmean <- brm(
+  bf(prop_native_rich ~ 1 + tmean, 
+     phi ~ tmean),
+  data = propnativeRich_small_5m2,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatRich_tmean, file= "models/nativeRich_tmean_5m2.rda")
+load("models/nativeRich_tmean_5m2.rda")
+
+m.propnatRich_hli <- brm(
+  bf(prop_native_rich ~ 1 + hli, 
+     phi ~ hli),
+  data = propnativeRich_small_5m2,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatRich_hli, file= "models/nativeRich_hli_5m2.rda")
+load("models/nativeRich_hli_5m2.rda")
+
+m.propnatRich_coolwarmslope <- brm(
+  bf(prop_native_rich ~ 1 + cool_warm_slope, 
+     phi ~ cool_warm_slope),
+  data = propnativeRich_small_5m2,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatRich_coolwarmslope, file= "models/nativeRich_coolwarmslope_5m2.rda")
+load("models/nativeRich_coolwarmslope_5m2.rda")
+
+
+loo(m.propnatRich, 
+    m.propnatRich_hli,
+    m.propnatRich_ppt,
+    m.propnatRich_tmean,
+    m.propnatRich_year,
+        m.propnatRich_coolwarmslope)
 
 tidy(m.propnatRich, effects = "fixed")
 summary(m.propnatRich)
@@ -370,112 +535,89 @@ bayes_R2(m.propnatRich)
 plot(m.propnatRich)
 pp_check(m.propnatRich)
 
-# Plug a dataset where quota is FALSE and TRUE into the model
-beta_bayes_pred <- m.propnatRich %>% 
-  epred_draws(newdata = tibble(num_burn = unique(propnativeRich$num_burn)))
-
-ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = num_burn)) +
-  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
-  scale_fill_manual(values = cal_palette("sierra1")) +
-  labs(x= "Predicted proportion of native species", y = NULL,
-       caption = "80% and 95% credible intervals shown in black")
-
+str(propnativeRich_small_5m2)
 
 m.propnatRich2 <- brm(
   bf(prop_native_rich ~ 1 + num_burn + year, 
      phi ~ num_burn + year),
-  data = propnativeRich_small,
+  data = propnativeRich_small_5m2,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-save(m.propnatRich2, file = "models/nativeRich2_feb23.rda")
-load("models/nativeRich2_feb23.rda")
+save(m.propnatRich2, file = "models/nativeRich2_5m2.rda")
+load("models/nativeRich2_5m2.rda")
 
-loo(m.propnatRich, m.propnatRich2)
+loo(m.propnatRich_year, m.propnatRich2)
 summary(m.propnatRich2)
 conditional_effects(m.propnatRich2)
 pp_check(m.propnatRich2)
 plot(m.propnatRich2)
 bayes_R2(m.propnatRich2)
-# Plug a dataset where quota is FALSE and TRUE into the model
-beta_bayes_pred <- m.propnatRich2 %>% 
-  epred_draws(newdata = expand_grid(num_burn = unique(propnativeRich$num_burn),
-                                    year = unique(propnativeRich$year))) 
-
-
-ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred, fill = year)) +
-  #stat_pointinterval(position = position_dodge(width = .4),
-  #                               .width = c(0.95))+
-  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
-  scale_fill_manual(values = cal_palette("sierra1")) +
-  labs(y = "Predicted proportion of native species", x = NULL,
-       caption = "80% and 95% credible intervals shown in black")
-
 
 
 m.propnatRich3 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn * year + hli, 
-     phi ~ num_burn * year + hli),
-  data = propnativeRich_small,
+  bf(prop_native_rich ~ 1 + num_burn + year + cool_warm_slope, 
+     phi ~ num_burn + year + cool_warm_slope),
+  data = propnativeRich_small_5m2,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-save(m.propnatRich3, file = "models/nativeRich3_feb23.rda")
-load("models/nativeRich3_feb23.rda")
+save(m.propnatRich3, file = "models/nativeRich3_5m2.rda")
+load("models/nativeRich3_5m2.rda")
 
-loo(m.propnatRich, m.propnatRich2b, m.propnatRich3)
+m.propnatRich4 <- brm(
+  bf(prop_native_rich ~ 1 + num_burn + year + cool_warm_slope + hli, 
+     phi ~ num_burn + year + cool_warm_slope + hli),
+  data = propnativeRich_small_5m2,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatRich4, file = "models/nativeRich4_5m2.rda")
+load("models/nativeRich4_5m2.rda")
+
+loo(m.propnatRich,m.propnatRich2,  m.propnatRich3, m.propnatRich4)
+
+
+loo(m.propnatRich, m.propnatRich2, m.propnatRich3)
 summary(m.propnatRich3)
 conditional_effects(m.propnatRich3)
 bayes_R2(m.propnatRich3)
+pp_check(m.propnatRich3)
+mcmc_intervals(m.propnatRich)
 
-# Plug a dataset where quota is FALSE and TRUE into the model
-range(propnativeRich_small$hli)
-mean(propnativeRich$hli)
-beta_bayes_pred <- m.propnatRich3 %>% 
-  epred_draws(newdata = expand_grid(num_burn = unique(propnativeRich$num_burn),
-                                    year = unique(propnativeRich$year),
-                                    hli = c(.7))) 
+#CREATE FIGURE
 
+nd <- propnativeRich_5m2 %>% 
+ data_grid(num_burn=seq(1,7,by=.01),
+            year=c(2021, 2022),
+            cool_warm_slope = c("cool","warm"))
 
-ggplot(beta_bayes_pred, aes(x = num_burn, y = .epred)) +
-  #stat_pointinterval(position = position_dodge(width = .4),
-  #                              .width = c(0.95))+
-  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi") +
-  scale_fill_manual(values = cal_palette("sierra1")) +
-  labs(y = "Predicted proportion of native species", x = NULL,
-       caption = "80% and 95% credible intervals shown in black")
+prop.rich.5m2.fitted <- 
+    fitted(m.propnatRich3, 
+           newdata= nd) %>% 
+    as.data.frame() %>% 
+    cbind(nd)
 
 
-m.propnatRich4 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn * year + hli + ppt, 
-     phi ~ num_burn * year + hli + ppt),
-  data = propnativeRich_small,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.propnatRich4, file = "models/nativeRich4_feb23.rda")
-load("models/nativeRich4_feb23.rda")
-
-loo(m.propnatRich,m.propnatRich2,  m.propnatRich3, m.propnatRich4)
-summary(m.propnatRich4)
-conditional_effects(m.propnatRich4)
-bayes_R2(m.propnatRich4)
-
-# Plug a dataset where quota is FALSE and TRUE into the model
-propnativeRich_small %>% 
-  data_grid(num_burn=seq(1,7,by=.1),
-            year=c(2021, 2022)) %>% 
-  add_draws(posterior_epred(m.propnatRich2, newdata= .)) %>% 
-  ggplot(aes(x=num_burn, y=prop_native_rich))+
-  stat_lineribbon(aes(y=.value),alpha=.35,.width = c(.66, .95))+
-  geom_point(data=propnativeRich_small , alpha=.2)+
-  geom_jitter(data=propnativeRich_small, alpha =.2)+
-  facet_wrap(~year)+
-  labs(x="Fire Frequency", y= "Proportion Native richness",
+  ggplot(prop.rich.5m2.fitted, aes(x=num_burn))+
+      geom_smooth(aes(y = Estimate, 
+                     ymin = Q2.5, ymax = Q97.5,
+                    fill = cool_warm_slope, 
+                    color = cool_warm_slope),
+                      stat = "identity", 
+                      alpha = 1/4, size = 1/2)+
+          geom_point(aes(y = Estimate, color = cool_warm_slope),
+                     size = 2/3)+
+    #geom_point(data=propnativeRich_small_5m2 , alpha=.2)+
+     #geom_jitter(data=propnativeRich_small_5m2, alpha =.2)+
+    facet_wrap(~year)+
+     labs(x="Fire Frequency", y= "Proportion Native richness",
        fill="credible interval")+
+     scale_color_manual(values = cal_palette("gayophytum")) +
+  scale_fill_manual(values = cal_palette("gayophytum")) +
   theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
@@ -484,7 +626,27 @@ propnativeRich_small %>%
         axis.title = element_text(size = 20),
         legend.title = element_blank())
 
+plot
 
+propnativeRich_5m2 %>% 
+  data_grid(num_burn=seq(1,7,by=.1),
+            year=c(2021, 2022),
+            cool_warm_slope = c("cool","warm")) %>% 
+  add_draws(posterior_epred(m.propnatRich3, newdata= .)) %>% 
+  ggplot(aes(x=num_burn, y=prop_native_rich))+
+  stat_lineribbon(aes(y=.value),alpha=.35,.width = c(.66, .95))+
+  geom_point(data=propnativeRich_5m2  , alpha=.2)+
+  geom_jitter(data=propnativeRich_5m2 , alpha =.2)+
+  facet_wrap(~year)+
+  labs(x="Fire Frequency", y= "Proportion Native Richness",
+       fill="credible interval")+
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank())
 
 ```
 
@@ -496,16 +658,16 @@ phi ~ 1+num_burn + year
 Step 1: run model with each potential predictor variable separately 
 Model comparisons:
                         elpd
-m.prop.cover.rich_num Burn  19.9 
-m.prop.cover.rich_year   13.3
-m.prop.cover.rich_hli   9.7
+m.prop.cover.rich_num Burn  22.2
+m.prop.cover.rich_year   9.3
+m.prop.cover.rich_hli   10
 HLI values range from 0 (coolest) to 1 (hottest).
-m.prop.cover.rich_ppt   6.4
-m.prop.cover.rich_tmean 6
-m.prop.cover.rich_slope 5.4
-m.prop.cover.rich_TSLF. 26.8
+m.prop.cover.rich_ppt   9.6
+m.prop.cover.rich_tmean 6.2
+m.prop.cover.rich_slope 5.8
 
 Calculated elpd - the expected log pointwise predictive density to figure out which predictors to add
+
 
 ```{r}
 LNU_cover_final <- read.csv("data/clean/LNU_speciesCover_FINAL.csv")
@@ -578,8 +740,8 @@ m.prop.cover.rich <- brm(
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-save(m.prop.cover.rich, file= "models/nativeCover_feb23.rda")
-load("models/nativeCover_feb23.rda")
+save(m.prop.cover.rich, file= "models/nativeCover_numburn.rda")
+load("models/nativeCover_numburn.rda")
 
 m.prop.cover.rich_year <- brm(
   bf(cover ~ 1 + year, 
@@ -590,6 +752,8 @@ m.prop.cover.rich_year <- brm(
   cores=4,
   seed = 1234)
 summary(m.prop.cover.rich_year)
+save(m.prop.cover.rich_year, file= "models/nativeCover_year.rda")
+load("models/nativeCover_year.rda")
 
 m.prop.cover.rich_ppt <- brm(
   bf(cover ~ 1 + ppt, 
@@ -599,8 +763,8 @@ m.prop.cover.rich_ppt <- brm(
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-summary(m.prop.cover.rich_ppt)
-conditional_effects(m.prop.cover.rich_ppt)
+save(m.prop.cover.rich_ppt, file= "models/nativeCover_ppt.rda")
+load("models/nativeCover_ppt.rda")
 
 m.prop.cover.rich_tmean <- brm(
   bf(cover ~ 1 + tmean, 
@@ -610,7 +774,8 @@ m.prop.cover.rich_tmean <- brm(
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-summary(m.prop.cover.rich_tmean)
+save(m.prop.cover.rich_tmean, file= "models/nativeCover_tmean.rda")
+load("models/nativeCover_tmean.rda")
 
 m.prop.cover.rich_hli <- brm(
   bf(cover ~ 1 + hli, 
@@ -620,6 +785,8 @@ m.prop.cover.rich_hli <- brm(
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
+save(m.prop.cover.rich_hli, file= "models/nativeCover_hli.rda")
+load("models/nativeCover_hli.rda")
 
 m.prop.cover.rich_slope <- brm(
   bf(cover ~ 1 + cool_warm_slope, 
@@ -629,43 +796,37 @@ m.prop.cover.rich_slope <- brm(
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
+save(m.prop.cover.rich_slope, file= "models/nativeCover_slope.rda")
+load("models/nativeCover_slope.rda")
 
-m.prop.cover.rich_TSLF <- brm(
-  bf(cover ~ 1 + TSLF, 
-     phi ~ TSLF),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-str(LNU_cover_prop)
 
 loo(m.prop.cover.rich, 
-    m.prop.cover.rich_TSLF,
     m.prop.cover.rich_year, 
     m.prop.cover.rich_hli, 
     m.prop.cover.rich_ppt, 
     m.prop.cover.rich_tmean, 
     m.prop.cover.rich_slope)
 
-tidy(m.prop.cover.rich, effects = "fixed")
-summary(m.prop.cover.rich)
-plot(m.prop.cover.rich)
-pp_check(m.prop.cover.rich)
-conditional_effects(m.prop.cover.rich)
-bayes_R2(m.prop.cover.rich)
-
-
 m.prop.cover.rich2 <- brm(
-  bf(cover ~ 1 + num_burn * year, 
-     phi ~ num_burn * year),
+  bf(cover ~ 1 + num_burn + hli, 
+     phi ~ num_burn + hli),
   data = LNU_cover_prop,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-save(m.prop.cover.rich2, file= "models/nativeCover_feb23_2.rda")
-load("models/nativeCover_feb23_2.rda")
+save(m.prop.cover.rich2, file= "models/nativeCover2.rda")
+load("models/nativeCover2.rda")
+
+stancode(m.prop.cover.rich3)
+brms::prior_summary(m.prop.cover.rich3)
+
+summary(m.prop.cover.rich2)
+loo(m.prop.cover.rich, m.prop.cover.rich2)
+plot(conditional_effects(m.prop.cover.rich2, points=T))
+plot(m.prop.cover.rich2)
+pp_check(m.prop.cover.rich2)
+bayes_R2(m.prop.cover.rich2)
 
 m.prop.cover.rich3 <- brm(
   bf(cover ~ 1 + num_burn + year, 
@@ -675,40 +836,15 @@ m.prop.cover.rich3 <- brm(
   chains = 4, iter = 2000, warmup = 1000,
   cores=4,
   seed = 1234)
-save(m.prop.cover.rich3, file= "models/nativeCover_feb23_3.rda")
-load("models/nativeCover_feb23_3.rda")
-
-stancode(m.prop.cover.rich3)
-brms::prior_summary(m.prop.cover.rich3)
+save(m.prop.cover.rich3, file= "models/nativeCover_3.rda")
+load("models/nativeCover_3.rda")
 
 summary(m.prop.cover.rich3)
 loo(m.prop.cover.rich, m.prop.cover.rich3)
-plot(conditional_effects(m.prop.cover.rich3, points=T))
-plot(m.prop.cover.rich3)
-mcmc_plot(m.prop.cover.rich3)
-pp_check(m.prop.cover.rich3)
+conditional_effects(m.prop.cover.rich3)
 bayes_R2(m.prop.cover.rich3)
+mcmc_plot(m.prop.cover.rich3)
 
-m.prop.cover.rich4 <- brm(
-  bf(cover ~ 1 + num_burn + year + hli, 
-     phi ~ num_burn + year + hli),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich4, file= "models/nativeCover_feb23_4.rda")
-load("models/nativeCover_feb23_4.rda")
-
-summary(m.prop.cover.rich4)
-loo(m.prop.cover.rich, m.prop.cover.rich3, m.prop.cover.rich4)
-conditional_effects(m.prop.cover.rich4)
-bayes_R2(m.prop.cover.rich4)
-mcmc_plot(m.prop.cover.rich4)
-
-
-#plot posterior predictive intervals
-range(LNU_cover_prop$hli)
 
 LNU_cover_prop %>% 
   data_grid(num_burn=seq(1,7,by=.1),
@@ -807,53 +943,6 @@ ggplot(posterior_beta,
        caption = "80% and 95% credible intervals shown in black") +
   facet_wrap(vars(component), ncol = 1, scales = "free_y") 
 
-
-```
-
-# model richness random forest 
-
-```{r}
-library(party)
-library(partykit)
-library(rpart)
-library(rpart.plot)
-LNU_cover_final <- read.csv("data/clean/LNU_speciesCover_FINAL.csv")
-
-str(LNU_cover_final)
-LNU_cover_final$num_burn <- as.factor(LNU_cover_final$num_burn)
-LNU_cover_final$TSLF <- as.factor(LNU_cover_final$TSLF)
-LNU_cover_final$mCC_FRI <- as.factor(LNU_cover_final$mCC_FRI)
-LNU_cover_final$aspect_name <- as.factor(LNU_cover_final$aspect_name)
-LNU_cover_final$year <- as.factor(LNU_cover_final$year)
-LNU_cover_final$elevation <- as.numeric(LNU_cover_final$elevation)
-LNU_cover_final$crrnFRI <- as.factor(LNU_cover_final$crrnFRI)
-LNU_cover_final$cool_warm_slope <- as.factor(LNU_cover_final$cool_warm_slope)
-LNU_cover_final$Geology <- as.factor(LNU_cover_final$Geology)
-str(LNU_cover_final)
-
-LNU_cover_small <- LNU_cover_final %>% 
-  filter(native.nonnative.prop == "prop_native_cover") %>% 
-  filter(num_burn != "7") %>% 
-  dplyr::select(cover, num_burn, TSLF, hli, cool_warm_slope, 
-         ppt, tmean, Geology, Distance_km)
-
-#run random forest model
-
-ctree <- ctree(cover ~ num_burn ,
-                data = LNU_cover_small)
-plot(ctree)
-
-ctree1 <- ctree(cover ~ num_burn + TSLF +
-                  hli + cool_warm_slope + ppt +tmean,
-                    data = LNU_cover_small,
-                control = ctree_control(testtype = "Bonferroni"))
-
-dev.off()
-print(ctree1)
-plot(ctree1)
-
-varimp(ctree1)
-varimp(ctree1, conditional = TRUE)
 
 ```
 
@@ -1350,58 +1439,25 @@ ggplot(pred_all, aes(x=num_burn, y=.epred, fill=spp))+
 ```
 
 
-# RANDOM FOREST - SHRUB DENSITY
 
-```{r RF shrub den}
+# shrub resprout height
 
-library(party)
-library(partykit)
-library(rpart)
-library(rpart.plot)
+```{r}
+#####RESP HEIGHT
 
-shrub_seedling_data <- read.csv("data/clean/shrub_seedling_data_ALL.csv")
+shrub_resp_ht <- read.csv("data/clean/shrub_resprout_height_ALL.csv")
 
-seedling_data <- left_join(shrub_seedling_data, plot.description_LNU, by="PlotID")
-seedling_data <- left_join(seedling_data, species.short, by ="spp")
+shrub_resp_ht <- left_join(shrub_resp_ht, plot.description_LNU, by="PlotID")
+shrub_resp_ht <- left_join(shrub_resp_ht, species.short, by ="spp")
 
-str(LNU_cover_final)
-seedling_data$num_burn <- as.factor(seedling_data$num_burn)
-seedling_data$TSLF <- as.factor(seedling_data$TSLF)
-seedling_data$mCC_FRI <- as.factor(seedling_data$mCC_FRI)
-seedling_data$aspect_name <- as.factor(seedling_data$aspect_name)
-seedling_data$year <- as.factor(seedling_data$year)
-seedling_data$elevation <- as.numeric(seedling_data$elevation)
-seedling_data$crrnFRI <- as.factor(seedling_data$crrnFRI)
-seedling_data$cool_warm_slope <- as.factor(seedling_data$cool_warm_slope)
-seedling_data$Geology <- as.factor(seedling_data$Geology)
-str(seedling_data)
+str(shrub_resp_ht)
+shrub_resp_ht$num_burn <- as.factor(shrub_resp_ht$num_burn)
 
-shrub_density_OBLS <- seedling_data %>%
-  filter(fac.obl == "OBL-S") %>% 
-  filter(num_burn != "7") %>% 
-  dplyr::select(prop.presence, num_burn, TSLF, hli, cool_warm_slope, 
-         ppt, tmean, Geology, Distance_km)
-
-#run random forest model
-
-ctree <- ctree(prop.presence ~ num_burn ,
-                data = shrub_density_OBLS)
-plot(ctree)
-
-ctree1 <- ctree(prop.presence ~ num_burn + 
-                  hli + cool_warm_slope + ppt +tmean,
-                    data = shrub_density_OBLS,
-                control = ctree_control(testtype = "Bonferroni"))
-
-dev.off()
-print(ctree1)
-plot(ctree1)
-
-varimp(ctree1)
-varimp(ctree1, conditional = TRUE)
-
-
+shrub_resp_ht %>% 
+  filter(spp == "ADFA") %>% 
+  ggplot(aes(x=num_burn, y=mean.ht))+
+  geom_boxplot()
+  geom_jitter()
 
 ```
-
 
