@@ -55,6 +55,8 @@ subplot_species_LNU <- left_join(subplot_species_LNU, species.short,
 
 
 str(subplot_species_LNU)
+
+
 #file for NMDS
 
 LNU_spp_totalSH <- subplot_species_LNU %>% 
@@ -111,14 +113,16 @@ LNU_subplot_native$cover[LNU_subplot_native$cover == "TR"] <- "0.05"
 str(LNU_subplot_native)
 LNU_subplot_native$cover <- as.numeric(LNU_subplot_native$cover)
 
-LNU_sub_native_wide <- LNU_subplot_native %>% 
-  mutate(plot_yr_quad = paste(plot_year, quad, sep=" ")) %>% 
-  select(plot_yr_quad, spp, cover) %>% 
+LNU_subplot_native_long <- LNU_subplot_native %>% 
+  group_by(plot_year, spp) %>% 
+ dplyr::summarise(cover = sum(cover))
+
+LNU_sub_native_wide <- LNU_subplot_native_long %>% 
   pivot_wider(names_from="spp",
               values_from="cover",
               values_fill = 0, values_fn = sum)
 
-write.csv(LNU_subplot_native,"data/clean/LNU_subplot_native_long.csv" )
+write.csv(LNU_subplot_native_long,"data/clean/LNU_subplot_native_long.csv" )
 write.csv(LNU_sub_native_wide,"data/clean/LNU_subplot_native_wide.csv" )
 
 #NONNATIVE SPECIES
@@ -139,15 +143,20 @@ LNU_subplot_nonnative <- subplot_species_LNU %>%
 str(LNU_subplot_nonnative)
 LNU_subplot_nonnative$cover <- as.numeric(LNU_subplot_nonnative$cover)
 
-LNU_sub_nonnative_wide <- LNU_subplot_nonnative %>% 
-  mutate(plot_yr_quad = paste(plot_year, quad, sep=" ")) %>% 
-  select(plot_yr_quad, spp, cover) %>% 
+LNU_subplot_nonnative_long <- LNU_subplot_nonnative %>% 
+  group_by(plot_year, spp) %>% 
+  dplyr::summarise(cover = sum(cover))
+
+LNU_sub_nonnative_wide <- LNU_subplot_nonnative_long %>% 
   pivot_wider(names_from="spp",
               values_from="cover",
               values_fill = 0, values_fn = sum)
 
-write.csv(LNU_subplot_nonnative,"data/clean/LNU_subplot_nonnative_long.csv" )
+write.csv(LNU_subplot_nonnative_long,"data/clean/LNU_subplot_nonnative_long.csv" )
 write.csv(LNU_sub_nonnative_wide,"data/clean/LNU_subplot_nonnative_wide.csv" )
+
+
+
 
 #SHRUB DENSITY 
 
@@ -169,9 +178,10 @@ shrub_density_long <- subplot_species_LNU %>%
   mutate(plot_spp = paste(plot_year, spp, by=" ")) %>% 
   select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
   mutate_if(is.numeric, ~replace_na(., 0)) %>% 
-  mutate(avg.count = (Q1+Q2+Q3+Q4+Q5)/5,
-         sum.count = Q1+Q2+Q3+Q4+Q5) %>% 
-  select(plot_spp, avg.count, sum.count) %>% 
+  mutate(avg.count.1m2 = (Q1+Q2+Q3+Q4+Q5)/5,
+         sum.count.5m2 = Q1+Q2+Q3+Q4+Q5,
+         count.250m2 = avg.count.1m2 * 250) %>% 
+  select(plot_spp, avg.count.1m2, sum.count.5m2, count.250m2) %>% 
   separate(plot_spp, c("plot_year", "spp"), sep=" ") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
@@ -249,22 +259,3 @@ shrub_seedling_data <- left_join(shrub_seedling_data, shrub_cover_final,
 write.csv(shrub_seedling_data, "data/clean/shrub_seedling_data_ALL.csv")
 
 
-#SHRUB RESPROUT HEIGHT??
-
-shrub_resp_ht <- subplot_species_LNU %>% 
-  filter(cover_count_ht == "HEIGHT",
-         Lifeform == "SH",
-         seedling_resp == "RESPROUT") %>% 
-  mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
-  mutate(plot_spp = paste(plot_year, spp, by=" ")) %>% 
-  select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
-  rowwise() %>% 
- dplyr::mutate(mean.ht = mean(c_across(starts_with("Q")),na.rm = TRUE)) %>% 
-  select(plot_spp, mean.ht) %>% 
-  separate(plot_spp, c("plot_year", "spp"), sep=" ") %>% 
-  separate(plot_year, c("PlotID", "year"), sep="_")
-
-str(shrub_resp_ht)
-shrub_resp_ht$year <- as.numeric(shrub_resp_ht$year)
-
-write.csv(shrub_resp_ht, "data/clean/shrub_resprout_height_ALL.csv")

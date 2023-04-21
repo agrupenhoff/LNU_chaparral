@@ -29,7 +29,7 @@ library(brmsmargins)
 library(ROCR) #calculate area under curve
 library(stringr) #str_detect
 library(forcats) #fct_rev
-
+library(ggridges)
 library(broom)            # Convert model objects to data frames
 library(broom.mixed)   
 
@@ -261,46 +261,65 @@ LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
 
 #sum up the number of non-zero entries per row 
 #first column ignored ([,-1]) since this is the site name, not species count
-LNU_richness_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_yr_quad,function(x) {
+LNU_richness_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_year,function(x) {
   data.frame(NONNATIVE_RICHNESS=sum(x[-2]>0.0))})
 
-LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_yr_quad,function(x) {
+LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_year,function(x) {
   data.frame(NATIVE_RICHNESS=sum(x[-2]>0.0))})
 
-LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_yr_quad")
+LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_year")
 
 LNU_richness_proportion_5m2 <- LNU_richness %>% 
   mutate_if(is.numeric, ~replace_na(.,0)) %>% 
   mutate(prop.native = (NATIVE_RICHNESS/(NATIVE_RICHNESS + NONNATIVE_RICHNESS))) %>% 
-  separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
-  group_by(plot_year) %>% 
-  dplyr::summarise(mean_native_rich = mean(NATIVE_RICHNESS),
-            mean_nonnative_rich = mean(NONNATIVE_RICHNESS),
-            mean_propNative = mean(prop.native),
-            sum_native_rich = sum(NATIVE_RICHNESS),
-            sum_nonnative_rich = sum(NONNATIVE_RICHNESS),
-            sum_propNative = sum(prop.native)) %>% 
-  pivot_longer(!plot_year,
-               names_to = "native.nonnative.prop",
-               values_to = "richness") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
-LNU_richness_proportion_1m2 <- LNU_richness %>% 
-  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
-  mutate(prop.native = (NATIVE_RICHNESS/(NATIVE_RICHNESS + NONNATIVE_RICHNESS))) %>% 
-  pivot_longer(!plot_yr_quad,
-               names_to = "native.nonnative.prop",
-               values_to = "richness") %>% 
-    separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
-  separate(plot_year, c("PlotID", "year"), sep="_") 
 
 LNU_richness_final_5m2 <- left_join(LNU_richness_proportion_5m2, plot.description_LNU, by="PlotID")
-LNU_richness_final_1m2 <- left_join(LNU_richness_proportion_1m2, plot.description_LNU, by="PlotID")
-
 
 write.csv(LNU_richness_final_5m2, "data/clean/LNU_subplot_RICHNESS_5m2.csv")
-write.csv(LNU_richness_final_1m2, "data/clean/LNU_subplot_RICHNESS_1m2.csv")
+
             
+```
+
+# prepare diversity file 
+
+```{r}
+#calculate richness
+
+LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
+LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
+
+LNU_sub_nonnative_wide <- LNU_sub_nonnative_wide %>% 
+  select(!X)
+LNU_sub_native_wide <- LNU_sub_native_wide %>% 
+  select(!X)
+
+
+#sum up the number of non-zero entries per row 
+#first column ignored ([,-1]) since this is the site name, not species count
+
+LNU_shanDiv_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_year,function(x) {
+  data.frame(NONNATIVE_SHANNON=diversity(x[-1], index="shannon"))
+  })
+
+LNU_shanDiv_native <- ddply(LNU_sub_native_wide,~plot_year,function(x) {
+  data.frame(NATIVE_SHANNON=diversity(x[-1], index="shannon"))
+  })
+
+LNU_shan <- left_join(LNU_shanDiv_native, LNU_shanDiv_nonnative, by="plot_year")
+
+LNU_shan_proportion_5m2 <- LNU_shan %>% 
+  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
+  mutate(prop.nativeshan = (NATIVE_SHANNON/(NATIVE_SHANNON + NONNATIVE_SHANNON)))  %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+
+LNU_shan_final_5m2 <- left_join(LNU_shan_proportion_5m2, plot.description_LNU, by="PlotID")
+
+
+write.csv(LNU_shan_final_5m2, "data/clean/LNU_subplot_SHANNON_5m2.csv")
+
 ```
 
 #prepare total cover file (proportion)
@@ -387,66 +406,43 @@ m.propnatRich3 <- brm(
 
 
 LNU_richness_5m2 <- read.csv("data/clean/LNU_subplot_RICHNESS_5m2.csv")
-LNU_richness_1m2 <- read.csv("data/clean/LNU_subplot_RICHNESS_1m2.csv")
 
-propnativeRich_1m2 <- LNU_richness_1m2 %>% 
-  filter(native.nonnative.prop == "prop.native")  %>% 
-  filter(PFR != "oak woodland") %>% 
-  dplyr::rename(prop_native_rich = richness)
+ggplot(LNU_richness_5m2 %>% filter(num_burn!=7), aes(x=num_burn, y=prop.native))+
+  geom_point()+
+  geom_smooth(method="lm")
 
 propnativeRich_5m2 <- LNU_richness_5m2 %>% 
-  filter(native.nonnative.prop == "mean_propNative")  %>% 
   filter(PFR != "oak woodland") %>% 
-  dplyr::rename(prop_native_rich = richness)
+  filter(num_burn != 7)
 
-str(propnativeRich)
-propnativeRich_1m2$num_burn <- as.numeric(propnativeRich_1m2$num_burn)
 propnativeRich_5m2$num_burn <- as.numeric(propnativeRich_5m2$num_burn)
-propnativeRich_1m2$year <- as.factor(propnativeRich_1m2$year)
 propnativeRich_5m2$year <- as.factor(propnativeRich_5m2$year)
-propnativeRich_1m2$elevation <- as.numeric(propnativeRich_1m2$elevation)
 propnativeRich_5m2$elevation <- as.numeric(propnativeRich_5m2$elevation)
-propnativeRich_1m2$cool_warm_slope <- as.factor(propnativeRich_1m2$cool_warm_slope)
 propnativeRich_5m2$cool_warm_slope <- as.factor(propnativeRich_5m2$cool_warm_slope)
 
 
-##BAYESIAN
-#repeated measures looking at richness based on different fire frequencies 
-
-ggplot(propnativeRich_1m2, 
-       aes(x=num_burn, y=prop_native_rich,
-                           color = cool_warm_slope))+
-  geom_point()
-
-ggplot(propnativeRich_5m2, 
-       aes(x=num_burn, y=prop_native_rich,
-                           color = cool_warm_slope))+
-  geom_point()
-
-
-propnativeRich_small_1m2 <- propnativeRich_1m2 %>% 
-  dplyr::select(prop_native_rich, year, Site, num_burn, mCC_FRI, TSLF,
-         ppt, tmean, elevation, slope, Distance_km, hli,
-         Geology, aspect_name, cool_warm_slope) %>% 
-  #can't have exactly 0 or 1
-  mutate(prop_native_rich = ifelse(prop_native_rich == 1, 0.999, prop_native_rich))
-
 propnativeRich_small_5m2 <- propnativeRich_5m2 %>% 
-  dplyr::select(prop_native_rich, year, Site, num_burn, mCC_FRI, TSLF,
+  dplyr::select(NATIVE_RICHNESS, NONNATIVE_RICHNESS,
+                prop.native, year, Site, num_burn, mCC_FRI, TSLF,
          ppt, tmean, elevation, slope, Distance_km, hli,
          Geology, aspect_name, cool_warm_slope) %>% 
   #can't have exactly 0 or 1
-  mutate(prop_native_rich = ifelse(prop_native_rich == 1, 0.999, prop_native_rich))
+  mutate(prop.native = ifelse(prop.native == 1, 0.999, prop.native))
+
+#CENTER AND SCALE COVARIATES
+propnativeRich_small_5m2$ppt.scale <- scale(propnativeRich_small_5m2$ppt, 
+                                             center = TRUE, scale = TRUE)
+propnativeRich_small_5m2$tmean.scale <- scale(propnativeRich_small_5m2$tmean, 
+                                              center = TRUE, scale = TRUE)
+propnativeRich_small_5m2$hli.scale <- scale(propnativeRich_small_5m2$hli, 
+                                            center = TRUE, scale = TRUE)
+propnativeRich_small_5m2$slope.scale <- scale(propnativeRich_small_5m2$slope, 
+                                              center = TRUE, scale = TRUE)
+propnativeRich_small_5m2$elevation.scale <- scale(propnativeRich_small_5m2$elevation, 
+                                                  center = TRUE, scale = TRUE)
 
 
-range(propnativeRich_small_1m2$prop_native_rich)
-#check if covariates are correlated
-hist(propnativeRich_1m2$prop_native_rich)
-str(propnativeRich_small_1m2)
-data_1m2 <- propnativeRich_small_1m2[ , c("ppt", "tmean", "elevation", "slope", "hli")]
-cor(data_1m2) #this looks good!!
-
-hist(propnativeRich_small_5m2$prop_native_rich)
+hist(propnativeRich_small_5m2$prop.native)
 str(propnativeRich_small_5m2)
 data_5m2 <- propnativeRich_small_5m2[ , c("ppt", "tmean", "elevation", "slope", "hli")]
 cor(data_5m2) #this looks good!!
@@ -454,7 +450,7 @@ cor(data_5m2) #this looks good!!
 
 ######## run model with each predictor variable seperately 
 m.propnatRich <- brm(
-  bf(prop_native_rich ~ 1 + num_burn, 
+  bf(prop.native ~ 1 + num_burn, 
      phi ~ num_burn),
   data = propnativeRich_small_5m2,
   family = Beta(),
@@ -466,7 +462,7 @@ load("models/nativeRich_numburn_5m2.rda")
 summary(m.propnatRich)
 
 m.propnatRich_year <- brm(
-  bf(prop_native_rich ~ 1 + year, 
+  bf(prop.native ~ 1 + year, 
      phi ~ year),
   data = propnativeRich_small_5m2,
   family = Beta(),
@@ -538,7 +534,7 @@ pp_check(m.propnatRich)
 str(propnativeRich_small_5m2)
 
 m.propnatRich2 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn + year, 
+  bf(prop.native ~ 1 + num_burn + year, 
      phi ~ num_burn + year),
   data = propnativeRich_small_5m2,
   family = Beta(),
@@ -548,16 +544,17 @@ m.propnatRich2 <- brm(
 save(m.propnatRich2, file = "models/nativeRich2_5m2.rda")
 load("models/nativeRich2_5m2.rda")
 
-loo(m.propnatRich_year, m.propnatRich2)
-summary(m.propnatRich2)
+
 conditional_effects(m.propnatRich2)
+loo(m.propnatRich, m.propnatRich2)
+summary(m.propnatRich2)
 pp_check(m.propnatRich2)
 plot(m.propnatRich2)
 bayes_R2(m.propnatRich2)
 
 
 m.propnatRich3 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn + year + cool_warm_slope, 
+  bf(prop.native ~ 1 + num_burn + year + cool_warm_slope, 
      phi ~ num_burn + year + cool_warm_slope),
   data = propnativeRich_small_5m2,
   family = Beta(),
@@ -568,7 +565,7 @@ save(m.propnatRich3, file = "models/nativeRich3_5m2.rda")
 load("models/nativeRich3_5m2.rda")
 
 m.propnatRich4 <- brm(
-  bf(prop_native_rich ~ 1 + num_burn + year + cool_warm_slope + hli, 
+  bf(prop.native ~ 1 + num_burn + year + cool_warm_slope + hli, 
      phi ~ num_burn + year + cool_warm_slope + hli),
   data = propnativeRich_small_5m2,
   family = Beta(),
@@ -581,74 +578,251 @@ load("models/nativeRich4_5m2.rda")
 loo(m.propnatRich,m.propnatRich2,  m.propnatRich3, m.propnatRich4)
 
 
-loo(m.propnatRich, m.propnatRich2, m.propnatRich3)
-summary(m.propnatRich3)
+summary(m.propnatRich2)
 conditional_effects(m.propnatRich3)
 bayes_R2(m.propnatRich3)
 pp_check(m.propnatRich3)
 mcmc_intervals(m.propnatRich)
+mcmc_plot(m.propnatRich4)
+
 
 #CREATE FIGURE
 
 nd <- propnativeRich_5m2 %>% 
  data_grid(num_burn=seq(1,7,by=.01),
-            year=c(2021, 2022),
-            cool_warm_slope = c("cool","warm"))
+            year=c(2021, 2022))
 
 prop.rich.5m2.fitted <- 
-    fitted(m.propnatRich3, 
-           newdata= nd) %>% 
+    fitted(m.propnatRich2, 
+           newdata= nd,
+           probs = c(0.05, 0.95)) %>% 
     as.data.frame() %>% 
-    cbind(nd)
+    cbind(nd) 
 
 
   ggplot(prop.rich.5m2.fitted, aes(x=num_burn))+
       geom_smooth(aes(y = Estimate, 
-                     ymin = Q2.5, ymax = Q97.5,
-                    fill = cool_warm_slope, 
-                    color = cool_warm_slope),
+                     ymin = Q5, ymax = Q95,
+                    fill = as.factor(year), 
+                    color = as.factor(year)),
                       stat = "identity", 
                       alpha = 1/4, size = 1/2)+
-          geom_point(aes(y = Estimate, color = cool_warm_slope),
+          geom_point(aes(y = Estimate, color = as.factor(year)),
                      size = 2/3)+
-    #geom_point(data=propnativeRich_small_5m2 , alpha=.2)+
-     #geom_jitter(data=propnativeRich_small_5m2, alpha =.2)+
-    facet_wrap(~year)+
+    geom_point(data=propnativeRich_small_5m2, 
+               aes(x=num_burn, y=prop.native),alpha=.2)+
+    geom_jitter(data=propnativeRich_small_5m2, 
+                aes(x=num_burn, y=prop.native), alpha =.2)+
+    xlim(1,6)+
      labs(x="Fire Frequency", y= "Proportion Native richness",
        fill="credible interval")+
-     scale_color_manual(values = cal_palette("gayophytum")) +
-  scale_fill_manual(values = cal_palette("gayophytum")) +
+  scale_color_manual(values = cal_palette("sierra1")) +
+  scale_fill_manual(values = cal_palette("sierra1")) +
   theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 20),
-        legend.title = element_blank())
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))+
+    guides(fill = FALSE)
 
-plot
 
-propnativeRich_5m2 %>% 
-  data_grid(num_burn=seq(1,7,by=.1),
-            year=c(2021, 2022),
-            cool_warm_slope = c("cool","warm")) %>% 
-  add_draws(posterior_epred(m.propnatRich3, newdata= .)) %>% 
-  ggplot(aes(x=num_burn, y=prop_native_rich))+
-  stat_lineribbon(aes(y=.value),alpha=.35,.width = c(.66, .95))+
-  geom_point(data=propnativeRich_5m2  , alpha=.2)+
-  geom_jitter(data=propnativeRich_5m2 , alpha =.2)+
-  facet_wrap(~year)+
-  labs(x="Fire Frequency", y= "Proportion Native Richness",
-       fill="credible interval")+
-  theme(legend.position = "bottom")+
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 15),
-        axis.text.x = element_text(size = 15),
-        axis.title = element_text(size = 20),
-        legend.title = element_blank())
+#
 
 ```
+
+# model shannon diversity 
+
+```{r}
+LNU_shan_5m2 <- read.csv("data/clean/LNU_subplot_SHANNON_5m2.csv")
+
+
+LNU_shan_5m2 %>% 
+  filter(PFR != "oak woodland") %>% 
+  ggplot(aes(x=num_burn, y=prop.nativeshan, color = as.factor(year)))+
+  geom_point()
+
+#visualize raw data - not updated
+
+shan_sum <- mean_shan %>% 
+  group_by(num_burn, native.nonnative.prop, year) %>% 
+  dplyr::summarise(mean_shan = mean(shannon, na.rm=TRUE),
+            max_shan = max(shannon, na.rm=TRUE),
+            min_shan = min(shannon, na.rm=TRUE),
+            n_obs = n(),
+            sd = sd(shannon, na.rm=TRUE),
+            se= sd/sqrt(n_obs))
+
+ggplot(shan_sum , 
+       aes(x=as.factor(num_burn), y=mean_shan, fill=native.nonnative.prop))+
+  geom_bar(stat = "identity", position = position_dodge())+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  geom_errorbar(aes(ymax=mean_shan + se, ymin=mean_shan-se),
+                width=.2,
+                position=position_dodge(.9))+
+  facet_wrap(~year)+
+  labs(x="Fire Frequency", y= "Average Shannon Diversity",
+       fill="")+
+   theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))
+
+shannon <- LNU_shan_5m2 %>% 
+  filter(PFR != "oak woodland") %>% 
+  filter(num_burn != 7) %>% 
+  mutate(prop.nativeshan = ifelse(prop.nativeshan == 1, 0.999, prop.nativeshan))
+
+shannon$num_burn <- as.numeric(shannon$num_burn)
+shannon$year <- as.factor(shannon$year)
+shannon$elevation <- as.numeric(shannon$elevation)
+shannon$cool_warm_slope <- as.factor(shannon$cool_warm_slope)
+
+
+#CENTER AND SCALE COVARIATES
+shannon$ppt.scale <- scale(shannon$ppt, 
+                                             center = TRUE, scale = TRUE)
+shannon$tmean.scale <- scale(shannon$tmean, 
+                                              center = TRUE, scale = TRUE)
+shannon$hli.scale <- scale(shannon$hli, 
+                                            center = TRUE, scale = TRUE)
+shannon$slope.scale <- scale(shannon$slope, 
+                                              center = TRUE, scale = TRUE)
+shannon$elevation.scale <- scale(shannon$elevation, 
+                                                  center = TRUE, scale = TRUE)
+
+######## run model with each predictor variable seperately 
+
+m.propnatShan <- brm(
+  bf(prop.nativeshan ~ 1 + num_burn, 
+     phi ~ num_burn),
+  data = shannon,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+
+save(m.propnatShan, file= "models/nativeShan_numburn.rda")
+load("models/nativeShan_numburn.rda")
+summary(m.propnatShan)
+conditional_effects(m.propnatShan)
+
+m.propnatShan_year <- brm(
+  bf(prop.nativeshan ~ 1 + year, 
+     phi ~ year),
+  data = shannon,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatShan_year, file= "models/nativeShan_year.rda")
+load("models/nativeShan_year.rda")
+
+m.propnatShan_slope <- brm(
+  bf(prop.nativeshan ~ 1 + cool_warm_slope, 
+     phi ~ cool_warm_slope),
+  data = shannon,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatShan_slope, file= "models/nativeShan_slope.rda")
+load("models/nativeShan_slope.rda")
+
+m.propnatShan_hli <- brm(
+  bf(prop.nativeshan ~ 1 + hli.scale, 
+     phi ~ hli.scale),
+  data = shannon,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatShan_hli, file= "models/nativeShan_hli.rda")
+load("models/nativeShan_hli.rda")
+
+loo(m.propnatShan, m.propnatShan_slope, m.propnatShan_year, m.propnatShan_hli)
+
+m.propnatShan2 <- brm(
+  bf(prop.nativeshan ~ 1 + num_burn + year, 
+     phi ~ num_burn + year),
+  data = shannon,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+
+save(m.propnatShan2, file= "models/nativeShan2.rda")
+load("models/nativeShan2.rda")
+
+summary(m.propnatShan2)
+loo(m.propnatShan, m.propnatShan2)
+
+m.propnatShan3 <- brm(
+  bf(prop.nativeshan ~ 1 + num_burn + year + cool_warm_slope, 
+     phi ~ num_burn + year + cool_warm_slope),
+  data = shannon,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+
+save(m.propnatShan3, file= "models/nativeShan3.rda")
+load("models/nativeShan3.rda")
+
+summary(m.propnatShan2)
+loo(m.propnatShan, m.propnatShan2, m.propnatShan3)
+
+#CREATE FIGURE
+
+nd <- shannon %>% 
+ data_grid(num_burn=seq(1,7,by=.01),
+            year=c(2021, 2022))
+
+shannon.fitted <- 
+    fitted(m.propnatShan2, 
+           newdata= nd,
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd) 
+
+
+  ggplot(shannon.fitted, aes(x=num_burn))+
+      geom_smooth(aes(y = Estimate, 
+                     ymin = Q5, ymax = Q95,
+                    fill = as.factor(year), 
+                    color = as.factor(year)),
+                      stat = "identity", 
+                      alpha = 1/4, size = 1/2)+
+          geom_point(aes(y = Estimate, color = as.factor(year)),
+                     size = 2/3)+
+    geom_point(data=shannon, 
+               aes(x=num_burn, y=prop.nativeshan),alpha=.2)+
+    geom_jitter(data=shannon, 
+                aes(x=num_burn, y=prop.nativeshan), alpha =.2)+
+    xlim(1,6)+
+     labs(x="Fire Frequency", y= "Proportion Native Shannon Diversity",
+       fill="credible interval")+
+  scale_color_manual(values = cal_palette("sierra1")) +
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))+
+    guides(fill = FALSE)
+
+
+```
+
 
 # model p(cover) brms - COMPLETE 
 
@@ -694,20 +868,12 @@ LNU_cover_final$elevation.scale <- scale(LNU_cover_final$elevation, center = TRU
 str(LNU_cover_final)
 
 unique(LNU_cover_final$native.nonnative.prop)
+
 LNU_cover_prop <- LNU_cover_final %>% 
   filter(native.nonnative.prop == "prop_native_cover") %>% 
+    filter(PFR != "oak woodland") %>% 
+  filter(num_burn != 7) %>% 
    mutate(cover= ifelse(cover == 1, 0.999, cover))
-
-ggplot(LNU_cover_prop, aes(x=num_burn, y=cover))+
-  geom_smooth(method="lm")
-
-ggplot(LNU_cover_prop, aes(x=cool_warm_slope, y=cover))+
-  geom_point()
-
-hist(LNU_cover_prop$cover)
-range(LNU_cover_prop$cover)
-
-#CENTER AND SCALE DATA
 
 
 plot(LNU_cover_prop$num_burn, LNU_cover_prop$cover)
@@ -808,8 +974,8 @@ loo(m.prop.cover.rich,
     m.prop.cover.rich_slope)
 
 m.prop.cover.rich2 <- brm(
-  bf(cover ~ 1 + num_burn + hli, 
-     phi ~ num_burn + hli),
+  bf(cover ~ 1 + num_burn + year, 
+     phi ~ num_burn + year),
   data = LNU_cover_prop,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
@@ -817,9 +983,6 @@ m.prop.cover.rich2 <- brm(
   seed = 1234)
 save(m.prop.cover.rich2, file= "models/nativeCover2.rda")
 load("models/nativeCover2.rda")
-
-stancode(m.prop.cover.rich3)
-brms::prior_summary(m.prop.cover.rich3)
 
 summary(m.prop.cover.rich2)
 loo(m.prop.cover.rich, m.prop.cover.rich2)
@@ -829,8 +992,8 @@ pp_check(m.prop.cover.rich2)
 bayes_R2(m.prop.cover.rich2)
 
 m.prop.cover.rich3 <- brm(
-  bf(cover ~ 1 + num_burn + year, 
-     phi ~ num_burn + year),
+  bf(cover ~ 1 + num_burn + year + cool_warm_slope, 
+     phi ~ num_burn + year + cool_warm_slope),
   data = LNU_cover_prop,
   family = Beta(),
   chains = 4, iter = 2000, warmup = 1000,
@@ -839,11 +1002,57 @@ m.prop.cover.rich3 <- brm(
 save(m.prop.cover.rich3, file= "models/nativeCover_3.rda")
 load("models/nativeCover_3.rda")
 
-summary(m.prop.cover.rich3)
-loo(m.prop.cover.rich, m.prop.cover.rich3)
+summary(m.prop.cover.rich2)
+loo(m.prop.cover.rich, m.prop.cover.rich2, m.prop.cover.rich3)
 conditional_effects(m.prop.cover.rich3)
 bayes_R2(m.prop.cover.rich3)
 mcmc_plot(m.prop.cover.rich3)
+
+
+#CREATE FIGURE
+
+nd <- LNU_cover_prop %>% 
+ data_grid(num_burn=seq(1,7,by=.01),
+            year=c(2021, 2022))
+
+cover.fitted <- 
+    fitted(m.prop.cover.rich2, 
+           newdata= nd,
+           scale = "response",
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd)
+?fitted.brmsfit
+
+  ggplot(cover.fitted, aes(x=num_burn))+
+      geom_smooth(aes(y = Estimate, 
+                     ymin = Q5, ymax = Q95,
+                    fill = as.factor(year), 
+                    color = as.factor(year)),
+                      stat = "identity", 
+                      alpha = 1/4, size = 1/2)+
+          geom_point(aes(y = Estimate, color = as.factor(year)),
+                     size = 2/3)+
+    geom_point(data=LNU_cover_prop, 
+               aes(x=num_burn, y=cover),alpha=.2)+
+    geom_jitter(data=LNU_cover_prop, 
+                aes(x=num_burn, y=cover), alpha =.2)+
+    xlim(1,6)+
+    #facet_wrap(~year)+
+     labs(x="Fire Frequency", y= "Proportion Native cover (%)",
+       fill="credible interval")+
+  scale_color_manual(values = cal_palette("sierra1")) +
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))+
+    guides(fill = FALSE)
+
 
 
 LNU_cover_prop %>% 
@@ -865,87 +1074,105 @@ LNU_cover_prop %>%
         axis.title = element_text(size = 20),
         legend.title = element_blank())
 
-#slope of line at average number of burns
-emtrends(m.prop.cover.rich3, ~ num_burn, var = "num_burn", 
-         at = list(num_burn = c(1:7)),
-         regrid = "response")
- #num_burn num_burn.trend lower.HPD upper.HPD
-#     3.17        -0.0815    -0.113   -0.0505
-
-## OVERALL TREND 
-emtrends(m.prop.cover.rich3, ~ 1, var = "num_burn", 
-         regrid = "response")
-
-#AVERAGE MARGINAL EFFECT
-# emtrends()-based AMEs
-grand_mean_ame <- m.prop.cover.rich %>% 
-  emtrends(~ num_burn,
-           var = "num_burn",
-           at = list(num_burn = seq(1,5,by=1)),
-           regrid = "response") %>% 
-  gather_emmeans_draws()
-
-ggplot(grand_mean_ame,aes(x = .value / 10, 
-                      fill = factor(num_burn))) +
-  stat_halfeye(slab_alpha = 0.75) +
- # scale_fill_manual() +
-  labs(x = "Average marginal effect of a\n increase in 1 fire recurrence",
-       y = "Proportion of native species", fill = "Fire Frequency") +
-  theme(legend.position = "bottom")
-
-ggplot(grand_mean_ame,aes(x = .value / 10)) +
-  stat_halfeye(slab_alpha = 0.75, 
-               point_interval = "median_hdi",
-               fill = "#0c4c8a") +
-  labs(x = "Average marginal effect of a\n increase in 1 fire recurrence",
-       y = "Proportion of native species", fill = "Fire Frequency") +
-  theme(legend.position = "bottom")+
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
-        legend.title = element_blank())
 
 
-#get adjusted means
-em <- emmeans(m.prop.cover.rich3,
-              ~ num_burn,
-              at = list(num_burn = seq(1,7,by=1)))
-em
-cont <- contrast(em, "tukey")
-cont
-#get the posterior draws from the contrasts
-cont_posterior <- gather_emmeans_draws(cont)
-cont_posterior
-#plot
-ggplot(cont_posterior,
-       aes(y = contrast, x = .value)) +
-  stat_halfeye()+
- # facet_wrap(~num_burn) +
-  geom_vline(xintercept = 0, color = "red", lty = 2)
-
-
-posterior_beta <- m.prop.cover.rich %>% 
-  gather_draws(`b_.*`, regex = TRUE) %>% 
-  mutate(component = ifelse(str_detect(.variable, "phi_"), "Precision", "Mean"),
-         intercept = str_detect(.variable, "Intercept"))
-posterior_beta
-
-ggplot(posterior_beta, 
-       aes(x = .value, y = fct_rev(.variable), fill = component)) +
-  geom_vline(xintercept = 0) +
-  stat_halfeye(aes(slab_alpha = intercept), 
-               .width = c(0.8, 0.95), point_interval = "median_hdi") +
-  scale_fill_viridis_d(option = "viridis", end = 0.6) +
-  scale_slab_alpha_discrete(range = c(1, 0.4)) +
-  guides(fill = "none", slab_alpha = "none") +
-  labs(x = "Coefficient", y = "Variable",
-       caption = "80% and 95% credible intervals shown in black") +
-  facet_wrap(vars(component), ncol = 1, scales = "free_y") 
 
 
 ```
 
+# seedling density values - visualize
+
+```{r}
+
+#####DENSITY
+
+shrub_seedling_data <- read.csv("data/clean/shrub_seedling_data_ALL.csv")
+
+seedling_data <- left_join(shrub_seedling_data, plot.description_LNU, by="PlotID")
+seedling_data <- left_join(seedling_data, species.short, by ="spp")
+
+#check data
+seedling_data %>% 
+  filter(fac.obl == "FAC"|
+           fac.obl == "OBL-S") %>% 
+  ggplot(aes(x=num_burn, y=count.250m2, color=spp))+
+  geom_smooth(method = "lm")+
+  geom_point()+
+  geom_jitter()+
+  facet_wrap(~fac.obl)
+
+
+#check numbe of 0s
+100*sum(shrub_density_long$density == 0)/nrow(shrub_density_long)
+
+##Visualize data
+str(seedling_data)
+#shrub_density_total$num_burn <- as.factor(shrub_density_total$num_burn)
+
+shrub_density_sum <- seedling_data %>% 
+  filter(fac.obl == "FAC"|
+           fac.obl == "OBL-S") %>% 
+  group_by(num_burn, fac.obl) %>% 
+  dplyr::summarise(mean_den = mean(count.250m2),
+            max_den = max(count.250m2),
+            min_den = min(count.250m2),
+            n_obs = n(),
+            sd = sd(count.250m2),
+            se= sd/sqrt(n_obs))
+
+ggplot(shrub_density_sum, 
+       aes(x=as.factor(num_burn), y=mean_den, fill=fac.obl))+
+  geom_bar(stat = "identity", position = position_dodge())+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  geom_errorbar(aes(ymax=mean_den + se, ymin=mean_den-se),
+                width=.2,
+                position=position_dodge(.9))+
+  labs(x="Fire Frequency", y= "Average seedling density",
+       fill="")+
+   theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))
+
+
+#BY SPECIES 
+shrub_density_spp <- seedling_data %>% 
+  filter(fac.obl == "FAC"|
+           fac.obl == "OBL-S") %>% 
+  filter(spp != "TOXDIV") %>% 
+    filter(spp != "MIMAUR") %>% 
+     filter(spp != "RIBMAL") %>% 
+  group_by(num_burn, fac.obl, spp) %>% 
+  dplyr::summarise(mean_den = mean(count.250m2),
+            max_den = max(count.250m2),
+            min_den = min(count.250m2),
+            n_obs = n(),
+            sd = sd(count.250m2),
+            se= sd/sqrt(n_obs))
+
+ggplot(shrub_density_spp, 
+       aes(x=as.factor(num_burn), y=mean_den))+
+  facet_wrap(~fac.obl)+
+  geom_bar(stat = "identity", aes(fill=spp))+
+  #geom_errorbar(aes(ymax=mean_den + se, ymin=mean_den - se),
+  #              width=.2, position = "identity")+
+   labs(x="Fire Frequency", y= "Average seedling density",
+       fill="")+
+  theme(legend.position = "bottom")+
+  scale_fill_viridis_d()+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))
+
+```
 
 
 # Seedling Density Regression Obligate seeders
@@ -971,85 +1198,12 @@ shrub_seedling_data <- read.csv("data/clean/shrub_seedling_data_ALL.csv")
 seedling_data <- left_join(shrub_seedling_data, plot.description_LNU, by="PlotID")
 seedling_data <- left_join(seedling_data, species.short, by ="spp")
 
-#check data
-seedling_data %>% 
-  filter(fac.obl == "FAC"|
-           fac.obl == "OBL-S") %>% 
-  ggplot(aes(x=num_burn, y=avg.count, color=spp))+
-  geom_smooth(method = "lm")+
-  geom_point()+
-  geom_jitter()+
-  facet_wrap(~fac.obl)
 
-seedling_data %>% 
-  filter(fac.obl == "FAC"|
-           fac.obl == "OBL-S") %>% 
-  ggplot(aes(x=num_burn, y=prop.presence, color=spp))+
-   geom_smooth(method = "lm")+
-  geom_point()+
-  geom_jitter()+
-  facet_wrap(~fac.obl)
-
-#check numbe of 0s
-100*sum(shrub_density_long$density == 0)/nrow(shrub_density_long)
-
-##Visualize data
-str(seedling_data)
-#shrub_density_total$num_burn <- as.factor(shrub_density_total$num_burn)
-
-shrub_density_sum <- seedling_data %>% 
-  filter(fac.obl == "FAC"|
-           fac.obl == "OBL-S") %>% 
-  group_by(num_burn, fac.obl) %>% 
-  dplyr::summarise(mean_den = mean(avg.count),
-            max_den = max(avg.count),
-            min_den = min(avg.count),
-            n_obs = n(),
-            sd = sd(avg.count),
-            se= sd/sqrt(n_obs))
-
-ggplot(shrub_density_sum, 
-       aes(x=as.factor(num_burn), y=mean_den, fill=fac.obl))+
-  geom_bar(stat = "identity", position = position_dodge())+
-  scale_fill_manual(values = cal_palette("sierra1")) +
-  geom_errorbar(aes(ymax=mean_den + se, ymin=mean_den-se),
-                width=.2,
-                position=position_dodge(.9))+
-  labs(x="Fire Frequency", y= "Average seedling density",
-       fill="")+
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
-        legend.title = element_blank())
-
-shrub_density_sum <- seedling_data %>% 
-  filter(fac.obl == "FAC"|
-           fac.obl == "OBL-S") %>% 
-  group_by(num_burn, fac.obl, spp) %>% 
-  dplyr::summarise(mean_den = mean(avg.count),
-            max_den = max(avg.count),
-            min_den = min(avg.count),
-            n_obs = n(),
-            sd = sd(avg.count),
-            se= sd/sqrt(n_obs))
-
-ggplot(shrub_density_sum, 
-       aes(x=as.factor(num_burn), y=mean_den, fill=spp))+
-  geom_bar(stat = "identity")+
-  facet_wrap(~fac.obl)+
-   labs(x="Fire Frequency", y= "Average seedling density",
-       fill="")+
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
-        legend.title = element_blank())
 
 hist(seedling_data$avg.count)
 hist(seedling_data$prop.presence)
-mean(seedling_data$avg.count). #.101
-mean(seedling_data$prop.presence). #.022
+mean(seedling_data$avg.count) #.101
+mean(seedling_data$prop.presence) #.022
 sd(seedling_data$avg.count) #.768
 sd(seedling_data$prop.presence) #.099
 
@@ -1063,7 +1217,6 @@ shrub_density_OBLS <- seedling_data %>%
   mutate(presence = ifelse(presence >0, 1, presence))
 
 shrub_density_OBLS$year <- as.factor(shrub_density_OBLS$year)
-shrub_density_FAC$year <- as.factor(shrub_density_FAC$year)
 
 plot(shrub_density_OBLS$num_burn, shrub_density_OBLS$presence)
 plot(shrub_density_OBLS$TSLF, shrub_density_OBLS$prop.presence)
@@ -1148,10 +1301,10 @@ m.shrubDensityOBL2b <- brm(data = shrub_density_OBLS,
 save(m.shrubDensityOBL2b, file = "models/shrubDensityOBL2b.rda")
 load("models/shrubDensityOBL2b.rda")
 
-
+loo(m.shrubDensityOBL,m.shrubDensityOBL2b)
 
 m.shrubDensityOBL3 <- brm(data = shrub_density_OBLS,
-                      presence ~ 1 + num_burn + year + hli,
+                      presence ~ 1 + num_burn + year + cool_warm_slope,
                       family = bernoulli(),
                       control = list(adapt_delta = 0.998, max_treedepth = 15),
                       prior = priors,
@@ -1173,7 +1326,7 @@ loo(m.shrubDensityOBL, m.shrubDensityOBL2b, m.shrubDensityOBL3)
 
 pred <- m.shrubDensityOBL2b %>% 
   epred_draws(newdata = expand_grid(num_burn=seq(1,7,by=.1),
-                                      year=c(2021, 2022)))
+                                    year=c(2021,2022)))
 pred
 
 ggplot(pred, aes(x=num_burn, y=.epred))+
@@ -1191,26 +1344,49 @@ ggplot(pred, aes(x=num_burn, y=.epred))+
         legend.title = element_blank())
 
 
-shrub_density_OBLS %>% 
-  data_grid(num_burn=seq(1,7,by=.1),
-            year=c(2021, 2022)) %>% 
-  add_draws(posterior_epred(m.shrubDensityOBL2b, newdata= .)) %>% 
-  ggplot(aes(x=num_burn, y=presence))+
-  stat_lineribbon(aes(y=.value),.width = c(.66, .95))+
-  #geom_point(data=shrub_density_OBLS , alpha=.2)+
-  #geom_jitter(data=shrub_density_OBLS, alpha =.2)+
-  scale_fill_brewer(palette = "Blues")+
-  facet_wrap(~year)+
-  labs(x="Fire Frequency", y= "Presence of obligate seeder",
+#CREATE FIGURE
+
+nd <- shrub_density_OBLS %>% 
+ data_grid(num_burn=seq(1,7,by=.01),
+            year=c(2021, 2022))
+
+OBL.fitted <- 
+    fitted(m.shrubDensityOBL2b, 
+           newdata= nd,
+           scale = "response",
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd)
+
+
+ ggplot(OBL.fitted, aes(x=num_burn))+
+      geom_smooth(aes(y = Estimate, 
+                     ymin = Q5, ymax = Q95,
+                    fill = as.factor(year), 
+                    color = as.factor(year)),
+                      stat = "identity", 
+                      alpha = 1/4, size = 1/2)+
+          geom_point(aes(y = Estimate, color = as.factor(year)),
+                     size = 2/3)+
+    #geom_point(data=LNU_cover_prop, 
+    #           aes(x=num_burn, y=cover),alpha=.2)+
+    #geom_jitter(data=LNU_cover_prop, 
+    #            aes(x=num_burn, y=cover), alpha =.2)+
+    xlim(1,6)+
+    #facet_wrap(~year)+
+     labs(x="Fire Frequency", y= "Proability of occurence",
        fill="credible interval")+
+ scale_color_manual(values = c("mediumpurple", "seagreen4")) +
+ scale_fill_manual(values = c("mediumpurple", "seagreen4")) +
   theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
-        legend.title = element_blank())
-
-
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))+
+    guides(fill = FALSE)
 
 
 ```
@@ -1303,27 +1479,50 @@ pp_check(m.shrubDensityFAC3)
 bayes_R2(m.shrubDensityFAC3)
 loo(m.shrubDensityFAC,m.shrubDensityFAC2, m.shrubDensityFAC3)
 
-nd <- expand_grid(num_burn=seq(1,7,by=.1),
-                  year=unique(shrub_density_OBLS$year))
 
-pred <- m.shrubDensityFAC2%>% 
-    epred_draws(newdata = nd)
+#CREATE FIGURE
 
-head(pred)
+nd <- shrub_density_FAC %>% 
+ data_grid(num_burn=seq(1,7,by=.01),
+            year=c(2021, 2022))
 
-ggplot(pred, aes(x=num_burn, y=.epred))+
-  stat_lineribbon()+
-  scale_fill_brewer(palette = "Blues")+
-  labs(x = "Fire frequency", 
-       y = "Predicted presence of facultative seeder",
-       fill = "Credible interval") +
-    facet_wrap(~year)+
+FAC.fitted <- 
+    fitted(m.shrubDensityFAC2, 
+           newdata= nd,
+           scale = "response",
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd)
+
+
+ ggplot(FAC.fitted, aes(x=num_burn))+
+      geom_smooth(aes(y = Estimate, 
+                     ymin = Q5, ymax = Q95,
+                    fill = as.factor(year), 
+                    color = as.factor(year)),
+                      stat = "identity", 
+                      alpha = 1/4, size = 1/2)+
+          geom_point(aes(y = Estimate, color = as.factor(year)),
+                     size = 2/3)+
+    #geom_point(data=LNU_cover_prop, 
+    #           aes(x=num_burn, y=cover),alpha=.2)+
+    #geom_jitter(data=LNU_cover_prop, 
+    #            aes(x=num_burn, y=cover), alpha =.2)+
+    xlim(1,6)+
+    #facet_wrap(~year)+
+     labs(x="Fire Frequency", y= "Proability of occurence",
+       fill="credible interval")+
+ scale_color_manual(values = c("mediumpurple", "seagreen4")) +
+ scale_fill_manual(values = c("mediumpurple", "seagreen4")) +
   theme(legend.position = "bottom")+
-    theme(panel.grid   = element_blank(),
+  theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
-        legend.title = element_blank())
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))+
+    guides(fill = FALSE)
 
 
 ```
@@ -1403,38 +1602,81 @@ load("models/shrubDensityLEPCAL.rda")
 summary(m.shrubDensityLEPCAL)
 conditional_effects(m.shrubDensityLEPCAL)
 
-nd <- expand_grid(num_burn=seq(1,7,by=.1),
-                  year=unique(shrub_density_OBLS$year))
+nd <- shrub_density_FAC %>% 
+ data_grid(num_burn=seq(1,7,by=.01),
+            year=c(2021, 2022))
 
-pred <- m.shrubDensityFAC%>% 
-    epred_draws(newdata = nd)
-pred_adfa <- m.shrubDensityADFA%>% 
-    epred_draws(newdata = nd) %>% 
+FAC.fitted <- 
+    fitted(m.shrubDensityFAC2, 
+           newdata= nd,
+           scale = "response",
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd) %>% 
+  mutate(spp = "COMBINE")
+
+ADFA.fitted <- 
+    fitted(m.shrubDensityADFA, 
+           newdata= nd,
+           scale = "response",
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd)%>% 
   mutate(spp = "ADFA")
-pred_ercal <- m.shrubDensityERCAL%>% 
-    epred_draws(newdata = nd) %>% 
-  mutate(spp = "ERCAL") 
-pred_lepcal <- m.shrubDensityLEPCAL%>% 
-    epred_draws(newdata = nd) %>% 
+ERICAL.fitted <- 
+    fitted(m.shrubDensityERCAL, 
+           newdata= nd,
+           scale = "response",
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd)%>% 
+  mutate(spp = "ERICAL")
+LEPCAL.fitted <- 
+    fitted(m.shrubDensityLEPCAL, 
+           newdata= nd,
+           scale = "response",
+           probs = c(0.05, 0.95)) %>% 
+    as.data.frame() %>% 
+    cbind(nd)%>% 
   mutate(spp = "LEPCAL")
 
-pred_all <- rbind(pred_adfa, pred_ercal, pred_lepcal)
+pred_all <- rbind(ADFA.fitted, LEPCAL.fitted, ERICAL.fitted)
 
-ggplot(pred_all, aes(x=num_burn, y=.epred, fill=spp))+
-  stat_lineribbon(alpha=.5)+
-  #scale_fill_brewer(palette = "Blues")+
-   scale_fill_manual(values = cal_palette("chaparral1")) +
-  facet_grid(spp~year, space = "free_x", scales = "free_x")+
-  labs(x = "Fire frequency", 
-       y = "Predicted presence of facultative seeder",
-       fill = "Credible interval") +
+ ggplot(pred_all, aes(x=num_burn))+
+      geom_smooth(aes(y = Estimate, 
+                     ymin = Q5, ymax = Q95,
+                   fill = as.factor(year), 
+                  color = as.factor(year)),
+                      stat = "identity", 
+                      alpha = 1/4, size = 1/2)+
+          geom_point(aes(y = Estimate, 
+                         color = as.factor(year)),
+                     size = 2/3)+
+    #geom_point(data=LNU_cover_prop, 
+    #           aes(x=num_burn, y=cover),alpha=.2)+
+    #geom_jitter(data=LNU_cover_prop, 
+    #            aes(x=num_burn, y=cover), alpha =.2)+
+    xlim(1,6)+
+    facet_wrap(~spp, ncol = 2)+
+     labs(x="Fire Frequency", y= "Proability of occurence",
+       fill="credible interval")+
+ scale_color_manual(values = c("mediumpurple", "seagreen4")) +
+ scale_fill_manual(values = c("mediumpurple", "seagreen4")) +
   theme(legend.position = "bottom")+
-   theme(panel.grid   = element_blank(),
+  theme(panel.grid   = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 13),
-        axis.text.x = element_text(size = 10),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
         legend.title = element_blank(),
-        legend.position = "none")
+        legend.text=element_text(size=12))+
+    guides(fill = FALSE)
+
+
+
+
+
+
   
 ```
 
