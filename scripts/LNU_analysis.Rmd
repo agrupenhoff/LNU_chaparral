@@ -1130,7 +1130,9 @@ ggplot(shrub_density_sum,
   labs(x="Fire Frequency", y= "Average seedling density",
        fill="")+
    theme(legend.position = "bottom")+
-  theme(panel.grid   = element_blank(),
+  theme(panel.background = element_rect(fill = "white", colour = NA),
+        panel.grid.major = element_line(colour = "gray90", size = 0.5),
+        panel.grid.minor = element_line(colour = "gray90", size = 0.5),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
@@ -1164,13 +1166,16 @@ ggplot(shrub_density_spp,
        fill="")+
   theme(legend.position = "bottom")+
   scale_fill_viridis_d()+
-  theme(panel.grid   = element_blank(),
+  theme(panel.background = element_rect(fill = "white", colour = NA),
+        panel.grid.major = element_line(colour = "gray90", size = 0.5),
+        panel.grid.minor = element_line(colour = "gray90", size = 0.5),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 20),
         legend.title = element_blank(),
         legend.text=element_text(size=12))
+
 
 ```
 
@@ -1316,7 +1321,7 @@ m.shrubDensityOBL3 <- brm(data = shrub_density_OBLS,
 save(m.shrubDensityOBL3, file = "models/shrubDensityOBL3.rda")
 load("models/shrubDensityOBL3.rda")
 
-summary(m.shrubDensityOBL3)
+summary(m.shrubDensityOBL2b)
 conditional_effects(m.shrubDensityOBL3)
 plot(m.shrubDensityOBL3)
 pp_check(m.shrubDensityOBL3)
@@ -1359,7 +1364,7 @@ OBL.fitted <-
     cbind(nd)
 
 
- ggplot(OBL.fitted, aes(x=num_burn))+
+ OBL.plot <- ggplot(OBL.fitted, aes(x=num_burn))+
       geom_smooth(aes(y = Estimate, 
                      ymin = Q5, ymax = Q95,
                     fill = as.factor(year), 
@@ -1379,7 +1384,9 @@ OBL.fitted <-
  scale_color_manual(values = c("mediumpurple", "seagreen4")) +
  scale_fill_manual(values = c("mediumpurple", "seagreen4")) +
   theme(legend.position = "bottom")+
-  theme(panel.grid   = element_blank(),
+   theme(panel.background = element_rect(fill = "white", colour = NA),
+        panel.grid.major = element_line(colour = "gray90", size = 0.5),
+        panel.grid.minor = element_line(colour = "gray90", size = 0.5),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
@@ -1387,6 +1394,7 @@ OBL.fitted <-
         legend.title = element_blank(),
         legend.text=element_text(size=12))+
     guides(fill = FALSE)
+ OBL.plot
 
 
 ```
@@ -1495,7 +1503,7 @@ FAC.fitted <-
     cbind(nd)
 
 
- ggplot(FAC.fitted, aes(x=num_burn))+
+ FAC.plot <- ggplot(FAC.fitted, aes(x=num_burn))+
       geom_smooth(aes(y = Estimate, 
                      ymin = Q5, ymax = Q95,
                     fill = as.factor(year), 
@@ -1515,15 +1523,18 @@ FAC.fitted <-
  scale_color_manual(values = c("mediumpurple", "seagreen4")) +
  scale_fill_manual(values = c("mediumpurple", "seagreen4")) +
   theme(legend.position = "bottom")+
-  theme(panel.grid   = element_blank(),
+     theme(panel.background = element_rect(fill = "white", colour = NA),
+        panel.grid.major = element_line(colour = "gray90", size = 0.5),
+        panel.grid.minor = element_line(colour = "gray90", size = 0.5),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 20),
         legend.title = element_blank(),
-        legend.text=element_text(size=12))+
+        legend.text=element_text(size=12))
     guides(fill = FALSE)
 
+FAC.plot
 
 ```
 
