@@ -254,6 +254,10 @@ plots_clean <- plots_coast %>%
                 aspect_degrees = aspect) %>% 
   replace_na(list(preFireYear = 1950)) %>% 
   mutate(TSLF = 2020-preFireYear) %>% 
+  mutate(TSLF_bin = case_when(
+              TSLF < 10 ~ "<10",
+              TRUE ~ ">10"
+  )) %>% 
   mutate(aspect_name = case_when(
     aspect_degrees < 22.5 ~ "north",
     aspect_degrees < 67.5 ~ "northeast",
@@ -273,6 +277,6 @@ plots_clean <- plots_coast %>%
 
 write_csv(plots_clean, "data/clean/LNU_plot_description_CLEAN.csv")
 
-
+getwd()
 ```
 

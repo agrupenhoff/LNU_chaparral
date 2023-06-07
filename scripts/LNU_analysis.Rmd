@@ -57,7 +57,37 @@ species.short <- SpeciesList %>%
 
 plyr::count(plot.description_LNU$cool_warm_slope)
 
+range(plot.description_LNU$ppt)
+hist(plot.description_LNU$ppt)
+
+range(plot.description_LNU$tmean)
+hist(plot.description_LNU$tmean)
+
+range(plot.description_LNU$hli)
+range(plot.description_LNU$slope)
+
+unique(plot.description_LNU$Geology)
+
+
+#collinearity
+
+hist(propnativeRich_small_5m2$prop.native)
+str(propnativeRich_small_5m2)
+data_5m2 <- propnativeRich_small_5m2[ , c("num_burn", "ppt", "tmean", "elevation", "slope", "hli", "Distance_km")]
+cor(data_5m2) #this looks good!!
+pairs(data_5m2)
+
+correlation_matrix <- cor(data_5m2)
+heatmap(correlation_matrix, 
+        main = "Correlation Matrix",
+        col = colorRampPalette(c("blue", "white", "red"))(100))
+
+plot(as.numeric(plot.description_LNU$TSLF), plot.description_LNU$num_burn)
+
+
+
 ```
+
 
 
 ## Severity 
