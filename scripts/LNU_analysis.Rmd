@@ -84,6 +84,10 @@ heatmap(correlation_matrix,
 
 plot(as.numeric(plot.description_LNU$TSLF), plot.description_LNU$num_burn)
 
+plot.description_LNU %>% 
+  ggplot(aes(x=TSLF_bin, y=num_burn ))+
+  geom_point()
+
 
 
 ```
@@ -321,9 +325,9 @@ LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
 LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
 
 LNU_sub_nonnative_wide <- LNU_sub_nonnative_wide %>% 
-  select(!X)
+  dplyr::select(!X)
 LNU_sub_native_wide <- LNU_sub_native_wide %>% 
-  select(!X)
+  dplyr::select(!X)
 
 
 #sum up the number of non-zero entries per row 
@@ -362,311 +366,39 @@ str(LNU_sub_nonnative_wide)
 LNU_nonnative <- LNU_sub_nonnative_wide %>% 
     dplyr::select(!(X)) %>% 
     dplyr::mutate(sum = rowSums(across(where(is.numeric)))) %>% 
-   dplyr::select(plot_yr_quad, sum) %>% 
+   dplyr::select(plot_year, sum) %>% 
     dplyr::rename(nonnative_cover = sum)
 
 LNU_native <- LNU_sub_native_wide %>% 
     dplyr::select(!(X)) %>% 
     dplyr::mutate(sum = rowSums(across(where(is.numeric)))) %>% 
-   dplyr::select(plot_yr_quad, sum) %>% 
+   dplyr::select(plot_year, sum) %>% 
     dplyr::rename(native_cover = sum)
 
-LNU_cover <- left_join(LNU_native, LNU_nonnative, by="plot_yr_quad")
+LNU_cover <- left_join(LNU_native, LNU_nonnative, by="plot_year")
 head(LNU_cover)
 
 LNU_cover_clean <- LNU_cover %>% 
   mutate_if(is.numeric, ~replace_na(.,0)) %>% 
-  separate(plot_yr_quad, c("plot_year", "quad"), sep=" ") %>% 
-  group_by(plot_year) %>% 
-  dplyr::summarise(mean_native_cover= mean(native_cover),
-                   mean_nonnative_cover = mean(nonnative_cover),
-                   sum_native_cover = sum(native_cover),
-                   sum_nonnative_cover = sum(nonnative_cover)) %>% 
-   mutate(prop_native_cover = (mean_native_cover/
-                                 (mean_native_cover + mean_nonnative_cover))) %>% 
+   mutate(prop_native_cover = (native_cover/
+                                 (native_cover + nonnative_cover))) %>% 
    pivot_longer(!plot_year,
                names_to = "native.nonnative.prop",
                values_to = "cover") %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
 
+head(LNU_cover_clean)
 
 LNU_cover_final <- left_join(LNU_cover_clean, plot.description_LNU, by="PlotID")
 
 write.csv(LNU_cover_final, "data/clean/LNU_speciesCover_FINAL.csv")
 
-str(LNU_cover_final)
-LNU_cover_final$num_burn <- as.factor(LNU_cover_final$num_burn)
-
-LNU_cover_final %>% 
-  filter(native.nonnative.prop == "prop_native_cover" &
-          PFR == "chaparral and serotinous conifer") %>% 
-  ggplot(aes(x= num_burn, y = cover))+
-  geom_boxplot()
-
-
-
-
 
 ```
 
 
 
 
-# model p(cover) brms - COMPLETE 
-
-final model beta binomial p(native cover) ~ 1 + num_burn + year 
-phi ~ 1+num_burn + year
-
-Step 1: run model with each potential predictor variable separately 
-Model comparisons:
-                        elpd
-m.prop.cover.rich_num Burn  22.2
-m.prop.cover.rich_year   9.3
-m.prop.cover.rich_hli   10
-HLI values range from 0 (coolest) to 1 (hottest).
-m.prop.cover.rich_ppt   9.6
-m.prop.cover.rich_tmean 6.2
-m.prop.cover.rich_slope 5.8
-
-Calculated elpd - the expected log pointwise predictive density to figure out which predictors to add
-
-
-```{r}
-LNU_cover_final <- read.csv("data/clean/LNU_speciesCover_FINAL.csv")
-
-str(LNU_cover_final)
-LNU_cover_final$num_burn <- as.numeric(LNU_cover_final$num_burn)
-LNU_cover_final$TSLF <- as.factor(LNU_cover_final$TSLF)
-LNU_cover_final$mCC_FRI <- as.factor(LNU_cover_final$mCC_FRI)
-LNU_cover_final$aspect_name <- as.factor(LNU_cover_final$aspect_name)
-LNU_cover_final$year <- as.factor(LNU_cover_final$year)
-LNU_cover_final$elevation <- as.numeric(LNU_cover_final$elevation)
-LNU_cover_final$crrnFRI <- as.factor(LNU_cover_final$crrnFRI)
-LNU_cover_final$cool_warm_slope <- as.factor(LNU_cover_final$cool_warm_slope)
-LNU_cover_final$Geology <- as.factor(LNU_cover_final$Geology)
-
-
-#CENTER AND SCALE COVARIATES
-LNU_cover_final$ppt.scale <- scale(LNU_cover_final$ppt, center = TRUE, scale = TRUE)
-LNU_cover_final$tmean.scale <- scale(LNU_cover_final$tmean, center = TRUE, scale = TRUE)
-LNU_cover_final$hli.scale <- scale(LNU_cover_final$hli, center = TRUE, scale = TRUE)
-LNU_cover_final$slope.scale <- scale(LNU_cover_final$slope, center = TRUE, scale = TRUE)
-LNU_cover_final$elevation.scale <- scale(LNU_cover_final$elevation, center = TRUE, scale = TRUE)
-
-str(LNU_cover_final)
-
-unique(LNU_cover_final$native.nonnative.prop)
-
-LNU_cover_prop <- LNU_cover_final %>% 
-  filter(native.nonnative.prop == "prop_native_cover") %>% 
-    filter(PFR != "oak woodland") %>% 
-  filter(num_burn != 7) %>% 
-   mutate(cover= ifelse(cover == 1, 0.999, cover))
-
-
-plot(LNU_cover_prop$num_burn, LNU_cover_prop$cover)
-plot(LNU_cover_prop$TSLF, LNU_cover_prop$cover)
-plot(LNU_cover_prop$ppt.scale, LNU_cover_prop$cover)
-plot(LNU_cover_prop$tmean.scale, LNU_cover_prop$cover)
-plot(LNU_cover_prop$hli.scale, LNU_cover_prop$cover)
-plot(LNU_cover_prop$aspect_name, LNU_cover_prop$cover)
-plot(LNU_cover_prop$cool_warm_slope, LNU_cover_prop$cover)
-plot(LNU_cover_prop$mCC_FRI, LNU_cover_prop$cover)
-plot(LNU_cover_prop$num_burn, LNU_cover_prop$TSLF)
-plot(LNU_cover_prop$num_burn, LNU_cover_prop$mCC_FRI)
-#determine outliers 
-min(LNU_cover_prop$cover) #0.008
-max(LNU_cover_prop$cover) #.99
-mean(LNU_cover_prop$cover) #.45
-ggplot(LNU_cover_prop) +
-  aes(x = "", y = cover) +
-  geom_boxplot(fill = "#0c4c8a") +
-  theme_minimal()
-
-#####
-######## run model with each predictor variable seperately 
-
-m.prop.cover.rich <- brm(
-  bf(cover ~ 1 + num_burn, 
-     phi ~ num_burn),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich, file= "models/nativeCover_numburn.rda")
-load("models/nativeCover_numburn.rda")
-
-m.prop.cover.rich_year <- brm(
-  bf(cover ~ 1 + year, 
-     phi ~ year),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-summary(m.prop.cover.rich_year)
-save(m.prop.cover.rich_year, file= "models/nativeCover_year.rda")
-load("models/nativeCover_year.rda")
-
-m.prop.cover.rich_ppt <- brm(
-  bf(cover ~ 1 + ppt, 
-     phi ~ ppt),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich_ppt, file= "models/nativeCover_ppt.rda")
-load("models/nativeCover_ppt.rda")
-
-m.prop.cover.rich_tmean <- brm(
-  bf(cover ~ 1 + tmean, 
-     phi ~ tmean),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich_tmean, file= "models/nativeCover_tmean.rda")
-load("models/nativeCover_tmean.rda")
-
-m.prop.cover.rich_hli <- brm(
-  bf(cover ~ 1 + hli, 
-     phi ~ hli),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich_hli, file= "models/nativeCover_hli.rda")
-load("models/nativeCover_hli.rda")
-
-m.prop.cover.rich_slope <- brm(
-  bf(cover ~ 1 + cool_warm_slope, 
-     phi ~ cool_warm_slope),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich_slope, file= "models/nativeCover_slope.rda")
-load("models/nativeCover_slope.rda")
-
-
-loo(m.prop.cover.rich, 
-    m.prop.cover.rich_year, 
-    m.prop.cover.rich_hli, 
-    m.prop.cover.rich_ppt, 
-    m.prop.cover.rich_tmean, 
-    m.prop.cover.rich_slope)
-
-m.prop.cover.rich2 <- brm(
-  bf(cover ~ 1 + num_burn + year, 
-     phi ~ num_burn + year),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich2, file= "models/nativeCover2.rda")
-load("models/nativeCover2.rda")
-
-summary(m.prop.cover.rich2)
-loo(m.prop.cover.rich, m.prop.cover.rich2)
-plot(conditional_effects(m.prop.cover.rich2, points=T))
-plot(m.prop.cover.rich2)
-pp_check(m.prop.cover.rich2)
-bayes_R2(m.prop.cover.rich2)
-
-m.prop.cover.rich3 <- brm(
-  bf(cover ~ 1 + num_burn + year + cool_warm_slope, 
-     phi ~ num_burn + year + cool_warm_slope),
-  data = LNU_cover_prop,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.prop.cover.rich3, file= "models/nativeCover_3.rda")
-load("models/nativeCover_3.rda")
-
-summary(m.prop.cover.rich2)
-loo(m.prop.cover.rich, m.prop.cover.rich2, m.prop.cover.rich3)
-conditional_effects(m.prop.cover.rich3)
-bayes_R2(m.prop.cover.rich3)
-mcmc_plot(m.prop.cover.rich3)
-
-
-#CREATE FIGURE
-
-nd <- LNU_cover_prop %>% 
- data_grid(num_burn=seq(1,7,by=.01),
-            year=c(2021, 2022))
-
-cover.fitted <- 
-    fitted(m.prop.cover.rich2, 
-           newdata= nd,
-           scale = "response",
-           probs = c(0.05, 0.95)) %>% 
-    as.data.frame() %>% 
-    cbind(nd)
-?fitted.brmsfit
-
-  ggplot(cover.fitted, aes(x=num_burn))+
-      geom_smooth(aes(y = Estimate, 
-                     ymin = Q5, ymax = Q95,
-                    fill = as.factor(year), 
-                    color = as.factor(year)),
-                      stat = "identity", 
-                      alpha = 1/4, size = 1/2)+
-          geom_point(aes(y = Estimate, color = as.factor(year)),
-                     size = 2/3)+
-    geom_point(data=LNU_cover_prop, 
-               aes(x=num_burn, y=cover),alpha=.2)+
-    geom_jitter(data=LNU_cover_prop, 
-                aes(x=num_burn, y=cover), alpha =.2)+
-    xlim(1,6)+
-    #facet_wrap(~year)+
-     labs(x="Fire Frequency", y= "Proportion Native cover (%)",
-       fill="credible interval")+
-  scale_color_manual(values = cal_palette("sierra1")) +
-  scale_fill_manual(values = cal_palette("sierra1")) +
-  theme(legend.position = "bottom")+
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 15),
-        axis.text.x = element_text(size = 15),
-        axis.title = element_text(size = 20),
-        legend.title = element_blank(),
-        legend.text=element_text(size=12))+
-    guides(fill = FALSE)
-
-
-
-LNU_cover_prop %>% 
-  data_grid(num_burn=seq(1,7,by=.1),
-            year=c(2021, 2022)) %>% 
-  add_draws(posterior_epred(m.prop.cover.rich3, newdata= .)) %>% 
-  ggplot(aes(x=num_burn, y=cover))+
-  stat_lineribbon(aes(y=.value),alpha=.35,.width = c(.66, .95))+
-  geom_point(data=LNU_cover_prop , alpha=.2)+
-  geom_jitter(data=LNU_cover_prop, alpha =.2)+
-  facet_wrap(~year)+
-  labs(x="Fire Frequency", y= "Proportion Native Cover",
-       fill="credible interval")+
-  theme(legend.position = "bottom")+
-  theme(panel.grid   = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y  = element_text(hjust = 0, size = 15),
-        axis.text.x = element_text(size = 15),
-        axis.title = element_text(size = 20),
-        legend.title = element_blank())
-
-
-
-
-
-```
 
 # seedling density values - visualize
 

@@ -1,0 +1,394 @@
+---
+title: "LNU Analysis"
+author: "Ashley Grupenhoff"
+date: "5/6/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "C:/Users/ashle/OneDrive/Documents/R/LNU_chaparral/LNU_chaparral")
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(vegan)
+library(plyr)
+library(brms)
+library(rstan)
+library(tidybayes)
+library(bayesplot)
+library(bayestestR)
+library(emmeans)
+library(calecopal)
+library(modelr)
+library(brmsmargins)
+library(ROCR) #calculate area under curve
+library(stringr) #str_detect
+library(forcats) #fct_rev
+library(ggridges)
+library(broom)            # Convert model objects to data frames
+library(broom.mixed)   
+
+#run faster
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+```
+
+# Input clean data
+```{r data}
+#raw
+TOT_species_LNU <- read.csv("data/raw/TOT_species_LNU.csv")
+subplot_species_LNU <- read.csv("data/raw/SubPlot_SPP_LNU.csv")
+severity_LNU <- read.csv("data/raw/Severity_LNU.csv")
+GroundCover_LNU <- read.csv("data/raw/GroundCover_LNU.csv")
+Mortality_LNU <- read.csv("data/raw/Mortality_LNU.csv")
+
+plot.description_LNU <- read.csv("data/clean/LNU_plot_description_CLEAN.csv")
+SpeciesList <- read.csv("data/raw/SpeciesList_jan23.csv")
+
+species.short <- SpeciesList %>% 
+  dplyr::select(spp, Lifeform, Native_nonnative, fac.obl) 
+
+plot.description_LNU %>% 
+  dplyr::count(num_burn, Site)
+
+```
+
+
+
+# Severity 
+
+```{r severity}
+
+
+severity_LNU_clean <- severity_LNU %>% 
+  group_by(PlotID, year) %>% 
+  dplyr::summarise(mean_diam_mm = mean(Mean_diam),
+            sd = sd(Mean_diam),
+            n_obs = n(),
+            se = sd/sqrt(n_obs),
+            max_diam_mm = max(Mean_diam))
+
+severity.plotdescription.LNU <- left_join(severity_LNU_clean, 
+                                          plot.description_LNU, by="PlotID")
+
+
+sevdata <- ddply(severity.plotdescription.LNU, c("num_burn"),
+                 summarise,
+                 N = sum(!is.na(mean_diam_mm)),
+                 mean_diam_mm_avg = mean(mean_diam_mm, na.rm=TRUE),
+                 sd= sd(mean_diam_mm, na.rm = TRUE),
+                 se = sd/sqrt(N),
+                 cv = 100*sd/mean_diam_mm_avg,
+                 
+                 max = mean(max_diam_mm, na.rm = TRUE),
+                 sd_max = sd(max_diam_mm, na.rm = TRUE),
+                 se_max = sd_max/sqrt(N),
+                 cv_max = 100*sd_max/max
+                 ) 
+
+
+ggplot(data=sevdata %>%  
+         filter(num_burn != "2"), 
+       aes(x=as.factor(num_burn), y=mean_diam_mm_avg))+
+  geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))+
+  geom_errorbar(aes(ymin=mean_diam_mm_avg-se, ymax=mean_diam_mm_avg+se), width=.1, size=.7)+
+  #geom_point(size=3, aes(colour=factor(num_burn)))+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+                     xlab("Fire frequency")+
+                     ylab("Fire Severity (mm)")+
+                    theme_bw()+
+                   theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 16),
+                          panel.grid = element_blank())
+ggsave(file="figures/sev~freq.svg", width = 4.5, height = 3)
+ggsave(file="figures/sev~freq.png", width = 4.5, height = 3)
+
+
+
+
+
+#LINEAR MODEL
+qqnorm(severity.plotdescription.LNU$mean_diam_mm, pch = 1, frame = FALSE)
+qqline(severity.plotdescription.LNU$mean_diam_mm, col = "steelblue", lwd = 2)
+
+m.sev <- lm(num_burn ~ mean_diam_mm ,
+                 data = severity.plotdescription.LNU, REML = F)
+summary(m.sev)
+coef(summary(m.nativeRich))
+plot(m.sev)
+
+```
+
+# Ground cover data
+
+```{r}
+
+str(GroundCover_LNU)
+GroundCover_LNU$Litter_depth_cm <- as.numeric(GroundCover_LNU$Litter_depth_cm)
+GroundCover_LNU$SH_ht_cm <- as.numeric(GroundCover_LNU$SH_ht_cm)
+GroundCover_LNU$year <- as.factor(GroundCover_LNU$year)
+
+groundcover_LNU <- left_join(GroundCover_LNU, 
+                              plot.description_LNU, by="PlotID")
+
+groundcover_LNU_clean <- groundcover_LNU %>% 
+  select(PlotID, year, num_burn, rock_percent, BG_percent, litter_percent,
+         Litter_depth_cm, SH_cover_percent, SH_ht_cm, HB_cover_percent) %>% 
+  group_by(num_burn, year) %>% 
+  dplyr::summarise_if(is.numeric, 
+                      funs(mean(., na.rm=T), 
+                           n = sum(!is.na(.)), 
+                           se = sd(., na.rm=T)/sqrt(sum(!is.na(.))))) 
+  
+ggplot(data=groundcover_LNU_clean,
+       aes(x=num_burn, y=HB_cover_percent_mean))+
+  geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))+
+  #geom_errorbar(aes(ymin=litter_percent_mean - litter_percent_se, 
+  #                  ymax=litter_percent_mean + litter_percent_se), 
+  #                width=.1, linewidth=.7)+
+  facet_wrap(~year)+
+  #geom_point(size=3, aes(colour=factor(num_burn)))+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  #                   xlab("Fire frequency")+
+  #                   ylab("Rock  %")+
+             
+                   theme(legend.title = element_blank(),
+                           axis.text = element_text(size=15),
+                            text = element_text(size = 16),
+                          panel.grid = element_blank())
+
+
+```
+
+
+
+# prepare Richness file
+
+Calculated richness by each sub plot probably want to do this by total plot?
+
+```{r Richness, echo=FALSE}
+#calculate richness
+
+LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
+LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
+
+#sum up the number of non-zero entries per row 
+#first column ignored ([,-1]) since this is the site name, not species count
+LNU_richness_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_year,function(x) {
+  data.frame(NONNATIVE_RICHNESS=sum(x[-2]>0.0))})
+
+LNU_richness_native <- ddply(LNU_sub_native_wide,~plot_year,function(x) {
+  data.frame(NATIVE_RICHNESS=sum(x[-2]>0.0))})
+
+LNU_richness <- left_join(LNU_richness_native, LNU_richness_nonnative, by="plot_year")
+
+LNU_richness_proportion_5m2 <- LNU_richness %>% 
+  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
+  mutate(prop.native = (NATIVE_RICHNESS/(NATIVE_RICHNESS + NONNATIVE_RICHNESS))) %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+
+LNU_richness_final_5m2 <- left_join(LNU_richness_proportion_5m2, plot.description_LNU, by="PlotID")
+
+write.csv(LNU_richness_final_5m2, "data/clean/LNU_subplot_RICHNESS_5m2.csv")
+
+            
+```
+
+# prepare diversity file 
+
+```{r}
+#calculate richness
+
+LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
+LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
+
+LNU_sub_nonnative_wide <- LNU_sub_nonnative_wide %>% 
+  dplyr::select(!X)
+LNU_sub_native_wide <- LNU_sub_native_wide %>% 
+  dplyr::select(!X)
+
+
+#sum up the number of non-zero entries per row 
+#first column ignored ([,-1]) since this is the site name, not species count
+
+LNU_shanDiv_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_year,function(x) {
+  data.frame(NONNATIVE_SHANNON=diversity(x[-1], index="shannon"))
+  })
+
+LNU_shanDiv_native <- ddply(LNU_sub_native_wide,~plot_year,function(x) {
+  data.frame(NATIVE_SHANNON=diversity(x[-1], index="shannon"))
+  })
+
+LNU_shan <- left_join(LNU_shanDiv_native, LNU_shanDiv_nonnative, by="plot_year")
+
+LNU_shan_proportion_5m2 <- LNU_shan %>% 
+  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
+  mutate(prop.nativeshan = (NATIVE_SHANNON/(NATIVE_SHANNON + NONNATIVE_SHANNON)))  %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+
+LNU_shan_final_5m2 <- left_join(LNU_shan_proportion_5m2, plot.description_LNU, by="PlotID")
+
+
+write.csv(LNU_shan_final_5m2, "data/clean/LNU_subplot_SHANNON_5m2.csv")
+
+```
+
+#prepare total cover file (proportion)
+
+```{r}
+LNU_sub_nonnative_wide <- read.csv("data/clean/LNU_subplot_nonnative_wide.csv")
+LNU_sub_native_wide <- read.csv("data/clean/LNU_subplot_native_wide.csv")
+str(LNU_sub_nonnative_wide)
+
+LNU_nonnative <- LNU_sub_nonnative_wide %>% 
+    dplyr::select(!(X)) %>% 
+    dplyr::mutate(sum = rowSums(across(where(is.numeric)))) %>% 
+   dplyr::select(plot_year, sum) %>% 
+    dplyr::rename(nonnative_cover = sum)
+
+LNU_native <- LNU_sub_native_wide %>% 
+    dplyr::select(!(X)) %>% 
+    dplyr::mutate(sum = rowSums(across(where(is.numeric)))) %>% 
+   dplyr::select(plot_year, sum) %>% 
+    dplyr::rename(native_cover = sum)
+
+LNU_cover <- left_join(LNU_native, LNU_nonnative, by="plot_year")
+head(LNU_cover)
+
+LNU_cover_clean <- LNU_cover %>% 
+  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
+   mutate(prop_native_cover = (native_cover/
+                                 (native_cover + nonnative_cover))) %>% 
+   pivot_longer(!plot_year,
+               names_to = "native.nonnative.prop",
+               values_to = "cover") %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+head(LNU_cover_clean)
+
+LNU_cover_final <- left_join(LNU_cover_clean, plot.description_LNU, by="PlotID")
+
+write.csv(LNU_cover_final, "data/clean/LNU_speciesCover_FINAL.csv")
+
+
+```
+
+
+
+
+
+# seedling density values - visualize
+
+```{r}
+
+#####DENSITY
+
+shrub_seedling_data <- read.csv("data/clean/shrub_seedling_data_ALL.csv")
+
+seedling_data <- left_join(shrub_seedling_data, plot.description_LNU, by="PlotID")
+seedling_data <- left_join(seedling_data, species.short, by ="spp")
+
+#check data
+seedling_data %>% 
+  filter(fac.obl == "FAC"|
+           fac.obl == "OBL-S") %>% 
+  ggplot(aes(x=num_burn, y=count.250m2, color=spp))+
+  geom_smooth(method = "lm")+
+  geom_point()+
+  geom_jitter()+
+  facet_wrap(~fac.obl)
+
+##Visualize data
+str(seedling_data)
+#shrub_density_total$num_burn <- as.factor(shrub_density_total$num_burn)
+
+str(seedling_data)
+seedling_data %>% 
+  ggplot(aes(x=num_burn, y=avg.count.1m2))+
+  geom_point()
+
+shrub_density_sum <- seedling_data %>% 
+  filter(fac.obl == "FAC"|
+           fac.obl == "OBL-S") %>% 
+  group_by(num_burn, fac.obl) %>% 
+  dplyr::summarise(mean_den = mean(avg.count.1m2),
+            max_den = max(avg.count.1m2),
+            min_den = min(avg.count.1m2),
+            n_obs = n(),
+            sd = sd(avg.count.1m2),
+            se= sd/sqrt(n_obs))
+
+ggplot(shrub_density_sum, 
+       aes(x=as.factor(num_burn), y=mean_den, fill=fac.obl))+
+  geom_bar(stat = "identity", position = position_dodge())+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  geom_errorbar(aes(ymax=mean_den + se, ymin=mean_den-se),
+                width=.2,
+                position=position_dodge(.9))+
+  labs(x="Fire Frequency", 
+       y= expression(Average~seedling~density~(seedling/m^2)),
+       fill="")+
+   theme(legend.position = "bottom")+
+  theme(panel.background = element_rect(fill = "white", colour = NA),
+        panel.grid.major = element_line(colour = "gray90", size = 0.5),
+        panel.grid.minor = element_line(colour = "gray90", size = 0.5),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))
+
+
+#BY SPECIES 
+shrub_density_spp <- seedling_data %>% 
+  filter(fac.obl == "FAC"|
+           fac.obl == "OBL-S") %>% 
+  filter(spp != "TOXDIV") %>% 
+  filter(spp != "MIMAUR") %>% 
+  filter(spp != "RIBMAL") %>% 
+  group_by(num_burn, fac.obl, spp) %>% 
+  dplyr::summarise(mean_den = mean(avg.count.1m2),
+            max_den = max(avg.count.1m2),
+            min_den = min(avg.count.1m2),
+            n_obs = n(),
+            sd = sd(avg.count.1m2),
+            se= sd/sqrt(n_obs))
+
+chaparral_col = c("#DCC27A", "#B0B9BE", "#63605F", "#985E5C", "#AEBFA8", "#F19B34","#D98A63", "#D9E4DC", "#C5D2D2", "#79B38F", "#9A9B5F", "#A7C2CD")
+
+ggplot(shrub_density_spp, 
+       aes(x=as.factor(num_burn), y=mean_den))+
+  facet_wrap(~fac.obl)+
+  geom_bar(stat = "identity", aes(fill=spp))+
+  #geom_errorbar(aes(ymax=mean_den + se, ymin=mean_den - se),
+  #              width=.2, position = "identity")+
+   labs(x="Fire Frequency", 
+        y= expression(Average~seedling~density~(seedling/m^2)),
+       fill="")+
+  theme(legend.position = "bottom")+
+  scale_fill_manual(values = chaparral_col) +
+  theme(panel.background = element_rect(fill = "white", colour = NA),
+        panel.grid.major = element_line(colour = "gray90", size = 0.5),
+        panel.grid.minor = element_line(colour = "gray90", size = 0.5),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))
+
+
+```
+
+
+

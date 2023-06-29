@@ -29,6 +29,7 @@ library(geosphere)
 library(osmdata)
 library(ggOceanMaps)
 library(sf)
+library(terra)
 
 ```
 
@@ -86,7 +87,7 @@ sf_use_s2(FALSE)
 resolve_data <- st_read("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/Ecoregions2017/Ecoregions2017.shp")
 st_crs(resolve_data) <- 4326
 st_crs(resolve_data)
-st_crs(attributes_sf)
+
 
 #create bounding box around attribute data
 bbox_lnu_plot <- st_bbox(lnu_plot_transf)
@@ -123,6 +124,7 @@ geom_sf(data = lnu_resolvedata,
 
 ```{r prism}
 # load temp and precip
+getwd()
 ppt = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_ppt_30yr_normal_800mM3_annual_bil/PRISM_ppt_30yr_normal_800mM3_annual_bil.bil")
 tmean = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_tmean_30yr_normal_800mM3_annual_bil/PRISM_tmean_30yr_normal_800mM3_annual_bil.bil")
 tmean
@@ -156,9 +158,9 @@ lnu_elevation_aws <- get_elev_point(plots, src = "aws", z=12)
 lnu_elevation_aws$elevation
 
 #raster elevation data
-elevation <- get_elev_raster(lnu_plot_transf, z=12)
+elevation <- get_elev_raster(plots, z=12)
 plot(elevation)
-plot(lnu_plot_transf, add=TRUE)
+plot(plots, add=TRUE)
 #write DEM to local directory
 # write to geotiff file (depends on rgdal)
 #if (require(rgdal)) {
@@ -174,6 +176,7 @@ hill <-  hillShade(slope,aspect,40,315)
 eastwest <- sin(aspect)
 northsouth <- cos(aspect)
 
+
 names(slope)
 names(northsouth) <- "northsouth"
 names(eastwest) <- "eastwest"
@@ -184,7 +187,7 @@ topo <- stack(elevation, slope, aspect, northsouth, eastwest)
 topo
 plot(topo)
 
-class(lnu_plot_transf)
+class(plots)
 
 #extract topographic data from raster using extract
 pts_topo <- terra::extract(topo, lnu_elevation_aws)
@@ -246,6 +249,7 @@ str(plots_final)
 LNU_coast_geology <- read.csv("data/clean/spatial/LNU_distance2coast.csv")
 plots_coast <- left_join(plots_final, LNU_coast_geology, by = "PlotID")
 
+
 plots_clean <- plots_coast %>% 
   dplyr::rename(num_burn = nm_prr_,
                 burned = Burned_,
@@ -277,6 +281,6 @@ plots_clean <- plots_coast %>%
 
 write_csv(plots_clean, "data/clean/LNU_plot_description_CLEAN.csv")
 
-getwd()
+
 ```
 

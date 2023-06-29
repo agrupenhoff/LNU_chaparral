@@ -259,3 +259,54 @@ shrub_seedling_data <- left_join(shrub_seedling_data, shrub_cover_final,
 write.csv(shrub_seedling_data, "data/clean/shrub_seedling_data_ALL.csv")
 
 
+
+#SHRUB REGEN PRESENCE 250m2 plot
+plot.description_LNU <- read.csv("data/clean/LNU_plot_description_CLEAN.csv")
+total_data <- left_join(TOT_species_LNU, plot.description_LNU, by="PlotID")
+total_data <- left_join(total_data, species.short, by ="spp")
+total_data$spp <- toupper(total_data$spp)
+
+total_seedling <- total_data %>% 
+  filter(SEEDLING.RESPROUT == "SEEDLING") %>% 
+  mutate(presence = 1) %>% 
+  dplyr::select(PlotID, spp, year, presence)
+
+unique(total_seedling$spp)
+
+nd <- expand_grid(PlotID =unique(total_data$PlotID),
+                  spp =unique(total_seedling$spp),
+                  year=unique(total_data$year))
+str(nd)
+nd$year <- as.numeric(nd$year)
+
+total_density_zeros <- left_join(nd, total_seedling, 
+                                by=c("PlotID","spp","year"))
+shrub_density_final <- total_density_zeros %>% 
+  mutate_if(is.numeric, ~replace_na(., 0)) 
+
+shrub_density_250 <- left_join(shrub_density_final, plot.description_LNU, by="PlotID")
+shrub_density_250 <- left_join(shrub_density_250, species.short, by ="spp")
+
+write.csv(shrub_density_250, "data/clean/shrub_seedling_presence_250.csv")
+
+
+
+#SHRUB RESPROUT HEIGHT
+unique(subplot_species_LNU$cover_count_ht)
+
+shrub_height <- subplot_species_LNU %>% 
+  filter(cover_count_ht == "HEIGHT",
+         Lifeform == "SH") %>% 
+  mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
+  mutate(plot_spp = paste(plot_year, spp, seedling_resp, by=" ")) %>% 
+  dplyr::select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
+  mutate_if(is.numeric, ~replace_na(., 0)) %>% 
+  mutate(avg.ht = (Q1+Q2+Q3+Q4+Q5)/5,
+         sum.ht = Q1+Q2+Q3+Q4+Q5) %>% 
+  dplyr::select(plot_spp, avg.ht, sum.ht) %>% 
+  separate(plot_spp, c("plot_year", "spp", "seedling_resp"), sep=" ") %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_")
+
+shrub_height$year <- as.numeric(shrub_height$year)
+
+write.csv(shrub_height, "data/clean/shrub_height.csv")

@@ -85,6 +85,9 @@ m.propnatRich_numburn <- brm(
 save(m.propnatRich_numburn, file= "models/nativeRich_numburn_5m2.rda")
 load("models/nativeRich_numburn_5m2.rda")
 summary(m.propnatRich_numburn)
+conditional_effects(m.propnatRich_numburn)
+pp_check(m.propnatRich_numburn, ndraw=100)
+bayes_R2(m.propnatRich_numburn)
 
 m.propnatRich_TSLF <- brm(
   bf(prop.native ~ 1 + TSLF, 
@@ -109,23 +112,11 @@ m.propnatRich_TSLFbin <- brm(
   cores=4,
   seed = 1234)
 save(m.propnatRich_TSLFbin, file= "models/nativeRich_TSLFbin_5m2.rda")
+load(file= "models/nativeRich_TSLFbin_5m2.rda")
 summary(m.propnatRich_TSLFbin)
 conditional_effects(m.propnatRich_TSLFbin)
 pp_check(m.propnatRich_TSLFbin)
 
-m.propnatRich_year <- brm(
-  bf(prop.native ~ 1 + year, 
-     phi ~ year),
-  data = propnativeRich_small_5m2,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.propnatRich_year, file= "models/nativeRich_year_5m2.rda")
-load("models/nativeRich_year_5m2.rda")
-summary(m.propnatRich_year)
-
-loo(m.propnatRich_numburn, m.propnatRich_TSLFbin, m.propnatRich_year)
 
 m.propnatRich_sq <- brm(
   bf(prop.native ~ 1 + num_burn + I(num_burn^2), 
@@ -139,6 +130,8 @@ save(m.propnatRich_sq, file= "models/nativeRich_numburn_sq_5m2.rda")
 load("models/nativeRich_numburn_sq_5m2.rda")
 summary(m.propnatRich_sq)
 conditional_effects(m.propnatRich_sq)
+bayes_R2(m.propnatRich_sq)
+pp_check(m.propnatRich_sq,ndraws = 100)
 
 m.propnatRich_sq_year <- brm(
   bf(prop.native ~ 1 + num_burn + I(num_burn^2) + year, 
@@ -151,14 +144,10 @@ m.propnatRich_sq_year <- brm(
 save(m.propnatRich_sq_year, file= "models/nativeRich_numburn_sq_year_5m2.rda")
 load("models/nativeRich_numburn_sq_year_5m2.rda")
 summary(m.propnatRich_sq_year)
+bayes_R2(m.propnatRich_sq_year)
+conditional_effects(m.propnatRich_sq_year)
 
 loo(m.propnatRich_numburn, m.propnatRich_sq, m.propnatRich_sq_year)
-
-summary(m.propnatRich_sq_year)
-conditional_effects(m.propnatRich_sq_year)
-plot(m.propnatRich_sq)
-pp_check(m.propnatRich_sq_year, ndraw=100)
-bayes_R2(m.propnatRich_sq_year)
 
 
 m.propnatRich_sq_year_TSLF <- brm(
@@ -174,27 +163,26 @@ load("models/nativeRich_numburn_sq_year_TSLF_5m2.rda")
 
 summary(m.propnatRich_sq_year_TSLF)
 conditional_effects(m.propnatRich_sq_year_TSLF)
-plot(m.propnatRich_sq_TSLF)
 pp_check(m.propnatRich_sq_year_TSLF, ndraws = 100)
 
 loo(m.propnatRich_sq_year_TSLF, m.propnatRich_sq, m.propnatRich_sq_year)
 
-#CREATE FIGURE for m.propnatrich_sq_year
-
-plot_predictions(m.propnatRich_sq_year_TSLF,
+#CREATE FIGURE 
+plot_predictions(m.propnatRich_sq_year,
                  condition = "num_burn",
                  vcov = TRUE)+
   geom_point(data = propnativeRich_small_5m2,
              aes(num_burn, prop.native))
 
 
+summary(m.propnatRich_sq_year)
 nd <- propnativeRich_5m2 %>% 
-  data_grid(num_burn=seq(1,7,by=.01),
-            year=c(2021, 2022),
-            TSLF_bin=unique(propnativeRich_5m2$TSLF_bin))
+  data_grid(num_burn=seq(1,6,by=.01),
+            year=c(2021, 2022))
 
+formula(m.propnatRich_sq_year)
 prop.rich.5m2.fitted <- 
-  fitted(m.propnatRich_sq_year_TSLF, 
+  fitted(m.propnatRich_sq_year, 
          newdata= nd,
          probs = c(0.05, 0.95)) %>% 
   as.data.frame() %>% 
@@ -208,7 +196,6 @@ ggplot(prop.rich.5m2.fitted, aes(x=num_burn))+
                   color = as.factor(year)),
               stat = "identity", 
               alpha = 1/4, size = 1/2)+
-  facet_wrap(~TSLF_bin)+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   geom_point(data=propnativeRich_small_5m2, 
@@ -232,11 +219,18 @@ ggplot(prop.rich.5m2.fitted, aes(x=num_burn))+
 
 
 
+#calcualte marginal effects
+rich_freq <- m.propnatRich_sq_year |> 
+  comparisons(variables = "num_burn", re_formula = NA)
+rich_freq
 
 
 
-
-
-
-
-
+  datagrid(model = m.propnatRich_sq_year,
+           num_burn = seq(1,6,by=0.1)) %>% 
+    add_epred_draws(m.propnatRich_sq_year, re_formula = NA) %>%  
+    compare_levels(variable = .epred, by = num_burn) %>% 
+    ggplot(aes(x = .epred * 100)) +
+    stat_halfeye() +
+    labs(x = "Difference in probability of success due to oxygen use\n(Percentage points)",
+         y = "Density")

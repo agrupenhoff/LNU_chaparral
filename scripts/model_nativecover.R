@@ -37,7 +37,7 @@ ggplot(LNU_cover_final %>%  filter(PFR != "oak woodland" &
 
 ggplot(LNU_cover_final %>%  filter(PFR != "oak woodland" &
                                      native.nonnative.prop == "prop_native_cover"), 
-       aes(x=TSLF_bin, y=cover, color = TSLF_bin))+
+       aes(x=TSLF, y=cover, color = TSLF_bin))+
   geom_point()+
   geom_smooth(method="loess")
 
@@ -46,13 +46,13 @@ propnativeCover <- LNU_cover_final %>%
            native.nonnative.prop == "prop_native_cover") 
 
 propnativeCover %>% 
-  dplyr::count(TSLF_bin)
+  dplyr::count(TSLF)
 
 propnativeCover$num_burn <- as.numeric(propnativeCover$num_burn)
 propnativeCover$year <- as.factor(propnativeCover$year)
 propnativeCover$elevation <- as.numeric(propnativeCover$elevation)
 propnativeCover$cool_warm_slope <- as.factor(propnativeCover$cool_warm_slope)
-propnativeCover$TSLF <- as.factor(propnativeCover$TSLF)
+propnativeCover$TSLF_bin <- as.factor(propnativeCover$TSLF_bin)
 
 str(propnativeCover)
 range(propnativeCover$cover)
@@ -86,6 +86,10 @@ m.propnatCover_numburn <- brm(
 save(m.propnatCover_numburn, file= "models/nativeCover_numburn.rda")
 load("models/nativeCover_numburn.rda")
 summary(m.propnatCover_numburn)
+conditional_effects(m.propnatCover_numburn)
+pp_check(m.propnatCover_numburn, ndraw=100)
+tidy(m.propnatCover_numburn)
+bayes_R2(m.propnatCover_numburn)
 
 m.propnatCover_TSLF <- brm(
   bf(cover ~ 1 + TSLF, 
@@ -98,7 +102,9 @@ m.propnatCover_TSLF <- brm(
 save(m.propnatCover_TSLF, file= "models/nativeCover_TSLF.rda")
 load("models/nativeCover_TSLF.rda")
 summary(m.propnatCover_TSLF)
-pp_check(m.propnatCover_TSLF)
+pp_check(m.propnatCover_TSLF, ndraws = 100)
+conditional_effects(m.propnatCover_TSLF)
+bayes_R2(m.propnatCover_TSLF)
 
 m.propnatCover_TSLFbin <- brm(
   bf(cover ~ 1 + TSLF_bin, 
@@ -114,19 +120,7 @@ summary(m.propnatCover_TSLFbin)
 conditional_effects(m.propnatCover_TSLFbin)
 pp_check(m.propnatCover_TSLFbin, ndraw=100)
 
-m.propnatCover_year <- brm(
-  bf(cover ~ 1 + year, 
-     phi ~ year),
-  data = propnativeCover,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.propnatCover_year, file= "models/nativeCover_year.rda")
-load("models/nativeCover_year.rda")
-summary(m.propnatCover_year)
-
-loo(m.propnatCover_numburn, m.propnatCover_TSLFbin, m.propnatCover_year)
+loo(m.propnatCover_numburn, m.propnatCover_TSLF)
 
 m.propnatCover_sq <- brm(
   bf(cover ~ 1 + num_burn + I(num_burn^2), 
@@ -140,6 +134,8 @@ save(m.propnatCover_sq, file= "models/nativeCover_numburn_sq.rda")
 load("models/nativeCover_numburn_sq.rda")
 summary(m.propnatCover_sq)
 conditional_effects(m.propnatCover_sq)
+pp_check(m.propnatCover_sq, ndraw=100)
+bayes_R2(m.propnatCover_sq)
 
 m.propnatCover_sq_year <- brm(
   bf(cover ~ 1 + num_burn + I(num_burn^2) + year, 
@@ -172,10 +168,11 @@ load("models/nativeCover_numburn_sq_year_TSLF.rda")
 summary(m.propnatCover_sq_year_TSLF)
 conditional_effects(m.propnatCover_sq_year_TSLF)
 pp_check(m.propnatCover_sq_year_TSLF, ndraws = 100)
+bayes_R2(m.propnatCover_sq_year_TSLF)
 
 loo(m.propnatCover_sq_year_TSLF, m.propnatCover_sq, m.propnatCover_sq_year)
 
-#CREATE FIGURE for m.propnatrich_sq_year
+#CREATE FIGURE 
 
 plot_predictions(m.propnatCover_sq_year,
                  condition = "num_burn",
@@ -183,9 +180,10 @@ plot_predictions(m.propnatCover_sq_year,
   geom_point(data = propnativeCover,
              aes(num_burn, cover))
 
+summary(m.propnatCover_sq_year)
 
 nd <- propnativeCover %>% 
-  data_grid(num_burn=seq(1,7,by=.01),
+  data_grid(num_burn=seq(1,6,by=.01),
             year=c(2021, 2022))
 
 prop.cover.fitted <- 
@@ -209,7 +207,6 @@ ggplot(prop.cover.fitted, aes(x=num_burn))+
              aes(x=num_burn, y=cover),alpha=.2)+
   geom_jitter(data=propnativeCover, 
               aes(x=num_burn, y=cover), alpha =.2)+
-  #facet_wrap(~TSLF)+
   labs(x="Fire Frequency", y= "Proportion Native cover",
        fill="credible interval")+
   scale_color_manual(values = cal_palette("sierra1")) +
