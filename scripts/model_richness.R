@@ -30,14 +30,10 @@ options(mc.cores = parallel::detectCores())
 LNU_richness_5m2 <- read.csv("data/clean/LNU_subplot_RICHNESS_5m2.csv")
 
 ggplot(LNU_richness_5m2 %>%  filter(PFR != "oak woodland") , 
-       aes(x=num_burn, y=prop.native, color = TSLF_bin))+
+       aes(x=num_burn, y=prop.native))+
   geom_point()+
-  geom_smooth(method="loess")
+  geom_smooth(method="lm")
 
-ggplot(LNU_richness_5m2 %>%  filter(PFR != "oak woodland") , 
-       aes(x=TSLF_bin, y=prop.native, color = TSLF_bin))+
-  geom_point()+
-  geom_smooth(method="loess")
 
 propnativeRich_5m2 <- LNU_richness_5m2 %>% 
   filter(PFR != "oak woodland") 
@@ -168,6 +164,22 @@ pp_check(m.propnatRich_sq_year_TSLF, ndraws = 100)
 loo(m.propnatRich_sq_year_TSLF, m.propnatRich_sq, m.propnatRich_sq_year)
 
 #CREATE FIGURE 
+load("models/nativeRich_numburn_sq_year_5m2.rda")
+summary(m.propnatRich_sq_year)
+
+plogis(1.39 + -0.50) - plogis(1.39)
+#increased fire frequency decreases native cover by 9%
+
+#overall average trend = -0.0366
+emtrends(m.propnatRich_sq_year, ~ 1, var = "num_burn", 
+         regrid = "response")
+
+#slope depends on levels of FF
+m.propnatRich_sq_year %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") 
+
 plot_predictions(m.propnatRich_sq_year,
                  condition = "num_burn",
                  vcov = TRUE)+
@@ -175,7 +187,7 @@ plot_predictions(m.propnatRich_sq_year,
              aes(num_burn, prop.native))
 
 
-summary(m.propnatRich_sq_year)
+
 nd <- propnativeRich_5m2 %>% 
   data_grid(num_burn=seq(1,6,by=.01),
             year=c(2021, 2022))
@@ -217,20 +229,25 @@ ggplot(prop.rich.5m2.fitted, aes(x=num_burn))+
         legend.text=element_text(size=12))+
   guides(fill = FALSE)
 
-
-
-#calcualte marginal effects
-rich_freq <- m.propnatRich_sq_year |> 
-  comparisons(variables = "num_burn", re_formula = NA)
-rich_freq
-
-
-
-  datagrid(model = m.propnatRich_sq_year,
-           num_burn = seq(1,6,by=0.1)) %>% 
-    add_epred_draws(m.propnatRich_sq_year, re_formula = NA) %>%  
-    compare_levels(variable = .epred, by = num_burn) %>% 
-    ggplot(aes(x = .epred * 100)) +
-    stat_halfeye() +
-    labs(x = "Difference in probability of success due to oxygen use\n(Percentage points)",
-         y = "Density")
+#average marginal effect at different frequencies
+m.propnatRich_sq_year %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") %>% 
+  gather_emmeans_draws() %>% 
+  ggplot(aes(x = .value, fill = factor(num_burn))) +
+  geom_vline(xintercept = 0) +
+  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi",
+               slab_alpha = 0.75)+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  labs(x = "Average marginal effect of fire frequency", 
+       y = "Density", fill = "Fire Frequency",
+       caption = "80% and 95% credible intervals shown in black")+
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))

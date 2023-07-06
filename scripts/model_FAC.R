@@ -35,7 +35,6 @@ library(brmsmargins)
 
 #####DENSITY
 shrub_density_250 <- read.csv("data/clean/shrub_seedling_presence_250.csv")
-
 shrub_seedling_data <- read.csv("data/clean/shrub_seedling_data_ALL.csv")
 plot.description_LNU <- read.csv("data/clean/LNU_plot_description_CLEAN.csv")
 SpeciesList <- read.csv("data/raw/SpeciesList_jan23.csv")
@@ -184,7 +183,7 @@ bayes_R2(m.shrubDensityFAC3)
 loo(m.shrubDensityFAC,m.shrubDensityFAC2, m.shrubDensityFAC3)
 
 
-datagrid(model=m.shrubDensityFAC2,
+datagrid(model=m.shrubDensityFAC2_250,
          num_burn=seq(1,6,by=.1)) %>% 
   add_epred_draws(m.shrubDensityFAC2,
                   re_formula = NA) %>% 
@@ -201,19 +200,20 @@ datagrid(model=m.shrubDensityFAC2,
   scale_fill_brewer(palette = "Blues")
 
 
+# Compute AUC for predicting Class with the model
+Prob <- predict(m.shrubDensityFAC2_250, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(shrub_density_250_FAC, presence)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC
 #CREATE FIGURE
+summary(m.shrubDensityFAC2_250)
+plogis((-0.47 + -0.33)) - plogis(-0.47)
 
 nd <- shrub_density_FAC %>% 
   data_grid(num_burn=seq(1,6,by=.01),
             year=c(2021, 2022))
-
-FAC.fitted <- 
-  fitted(m.shrubDensityFAC2, 
-         newdata= nd,
-         scale = "response",
-         probs = c(0.05, 0.95)) %>% 
-  as.data.frame() %>% 
-  cbind(nd)
 
 FAC.fitted.250 <- 
   fitted(m.shrubDensityFAC2_250, 
@@ -278,6 +278,17 @@ conditional_effects(m.shrubDensityADFA)
 bayes_R2(m.shrubDensityADFA)
 pp_check(m.shrubDensityADFA, ndraws = 100)
 
+# Compute AUC for predicting Class with the model
+Prob <- predict(m.shrubDensityADFA, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(shrub_density_ADFA, presence)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC
+#CREATE FIGURE
+summary(m.shrubDensityADFA)
+plogis((1.20 + -0.70)) - plogis(1.20)
+
 shrub_density_ERICAL<- shrub_density_250 %>%
   filter(spp == "ERICAL") 
 shrub_density_ERICAL$year <- as.factor(shrub_density_ERICAL$year)
@@ -299,6 +310,15 @@ summary(m.shrubDensityERICAL)
 conditional_effects(m.shrubDensityERICAL)
 bayes_R2(m.shrubDensityERICAL)
 pp_check(m.shrubDensityERICAL, ndraws = 100)
+# Compute AUC for predicting Class with the model
+Prob <- predict(m.shrubDensityERICAL, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(shrub_density_ERICAL, presence)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC
+summary(m.shrubDensityERICAL)
+plogis((-1.03 + 0.05)) - plogis(-1.03)
 
 shrub_density_LEPCAL<- shrub_density_250 %>%
   filter(spp == "LEPCAL") 
@@ -321,6 +341,17 @@ summary(m.shrubDensityLEPCAL)
 conditional_effects(m.shrubDensityLEPCAL)
 bayes_R2(m.shrubDensityLEPCAL)
 pp_check(m.shrubDensityLEPCAL, ndraws = 100)
+
+# Compute AUC for predicting Class with the model
+Prob <- predict(m.shrubDensityLEPCAL, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(shrub_density_LEPCAL, presence)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC
+#CREATE FIGURE
+summary(m.shrubDensityLEPCAL)
+plogis((0.16 + -0.66)) - plogis(0.16)
 
 nd <- shrub_density_FAC%>% 
   data_grid(num_burn=seq(1,6,by=.01),

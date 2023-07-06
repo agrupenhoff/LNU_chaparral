@@ -35,12 +35,6 @@ ggplot(LNU_cover_final %>%  filter(PFR != "oak woodland" &
   geom_point()+
   geom_smooth(method="loess")
 
-ggplot(LNU_cover_final %>%  filter(PFR != "oak woodland" &
-                                     native.nonnative.prop == "prop_native_cover"), 
-       aes(x=TSLF, y=cover, color = TSLF_bin))+
-  geom_point()+
-  geom_smooth(method="loess")
-
 propnativeCover <- LNU_cover_final %>% 
   filter(PFR != "oak woodland"&
            native.nonnative.prop == "prop_native_cover") 
@@ -106,20 +100,6 @@ pp_check(m.propnatCover_TSLF, ndraws = 100)
 conditional_effects(m.propnatCover_TSLF)
 bayes_R2(m.propnatCover_TSLF)
 
-m.propnatCover_TSLFbin <- brm(
-  bf(cover ~ 1 + TSLF_bin, 
-     phi ~ TSLF_bin),
-  data = propnativeCover,
-  family = Beta(),
-  chains = 4, iter = 2000, warmup = 1000,
-  cores=4,
-  seed = 1234)
-save(m.propnatCover_TSLFbin, file= "models/nativeCover_TSLFbin.rda")
-load("models/nativeCover_TSLFbin.rda")
-summary(m.propnatCover_TSLFbin)
-conditional_effects(m.propnatCover_TSLFbin)
-pp_check(m.propnatCover_TSLFbin, ndraw=100)
-
 loo(m.propnatCover_numburn, m.propnatCover_TSLF)
 
 m.propnatCover_sq <- brm(
@@ -133,6 +113,7 @@ m.propnatCover_sq <- brm(
 save(m.propnatCover_sq, file= "models/nativeCover_numburn_sq.rda")
 load("models/nativeCover_numburn_sq.rda")
 summary(m.propnatCover_sq)
+tab_model(m.propnatCover_sq)
 conditional_effects(m.propnatCover_sq)
 pp_check(m.propnatCover_sq, ndraw=100)
 bayes_R2(m.propnatCover_sq)
@@ -148,6 +129,7 @@ m.propnatCover_sq_year <- brm(
 save(m.propnatCover_sq_year, file= "models/nativeCover_numburn_sq_year.rda")
 load("models/nativeCover_numburn_sq_year.rda")
 summary(m.propnatCover_sq_year)
+tab_model(m.propnatCover_sq_year)
 pp_check(m.propnatCover_sq_year, ndraw=100)
 bayes_R2(m.propnatCover_sq_year)
 
@@ -173,6 +155,50 @@ bayes_R2(m.propnatCover_sq_year_TSLF)
 loo(m.propnatCover_sq_year_TSLF, m.propnatCover_sq, m.propnatCover_sq_year)
 
 #CREATE FIGURE 
+load("models/nativeCover_numburn_sq_year.rda")
+
+
+summary(m.propnatCover_sq_year)
+bayes_R2(m.propnatCover_sq_year)
+
+plogis(2.54 + -1.17) - plogis(2.54)
+#increased fire frequency decreases native cover by 13%
+
+
+#average marginal effect at different frequencies
+m.propnatCover_sq_year %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") %>% 
+  gather_emmeans_draws() %>% 
+ggplot(aes(x = .value, fill = factor(num_burn))) +
+  geom_vline(xintercept = 0) +
+  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi",
+               slab_alpha = 0.75)+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  labs(x = "Average marginal effect of fire frequency", 
+       y = "Density", fill = "Fire Frequency",
+       caption = "80% and 95% credible intervals shown in black")+
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))
+
+#overall average trend = -0.117
+emtrends(m.propnatCover_sq_year, ~ 1, var = "num_burn", 
+         regrid = "response")
+
+#slope depends on levels of FF
+m.propnatCover_sq_year %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") 
+
+
 
 plot_predictions(m.propnatCover_sq_year,
                  condition = "num_burn",

@@ -204,6 +204,26 @@ datagrid(model=m.shrubDensityOBL3,
 
 
 #CREATE FIGURE
+load("models/shrubDensityOBL2.rda")
+summary(m.shrubDensityOBL2)
+bayes_R2(m.shrubDensityOBL2)
+
+## CALCULATE AREA UNDER THE CURVE
+# Compute AUC for predicting Class with the model
+Prob <- predict(m.shrubDensityOBL2, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(shrub_density_OBLS, presence)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC
+#area under the curve = 0.819 which seems super good!!
+summary(m.shrubDensityOBL2)
+tab_model(m.shrubDensityOBL2, transform = NULL)
+tab_model(m.shrubDensityOBL2)
+
+exp(-0.92)
+plogis((-0.49 + -0.92)) - plogis(-0.49)
+#fire frequency decreases obligate seedling species on average by 18%
 
 nd <- shrub_density_OBLS %>% 
   data_grid(num_burn=seq(1,6,by=.01),
@@ -278,6 +298,17 @@ summary(m.shrubDensityCEACUN)
 conditional_effects(m.shrubDensityCEACUN)
 bayes_R2(m.shrubDensityCEACUN)
 pp_check(m.shrubDensityCEACUN, ndraws = 100)
+plogis((1.45 + -1.10)) - plogis(1.45)
+
+
+# Compute AUC for predicting Class with the model
+Prob <- predict(m.shrubDensityCEACUN, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(shrub_density_CEACUN, presence)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC
+#area under the curve = 0.872 which seems super good!!
 
 shrub_density_CEAOLI <- shrub_density_250 %>%
   filter(spp == "CEAOLI") 
@@ -298,10 +329,19 @@ save(m.shrubDensityCEAOLI, file = "models/shrubDensityCEAOLI.rda")
 load("models/shrubDensityCEAOLI.rda")
 
 summary(m.shrubDensityCEAOLI)
+plogis((-0.49 + -1.20)) - plogis(-0.49)
 conditional_effects(m.shrubDensityCEAOLI)
 bayes_R2(m.shrubDensityCEAOLI)
 pp_check(m.shrubDensityCEAOLI, ndraws = 100)
 
+# Compute AUC for predicting Class with the model
+Prob <- predict(m.shrubDensityCEAOLI, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(shrub_density_CEAOLI, presence)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC
+#area under the curve = 0.900 which seems super good!!
 
 nd <- shrub_density_OBLS %>% 
   data_grid(num_burn=seq(1,6,by=.01),
@@ -405,3 +445,15 @@ plot(m.shrubDensityOBL3)
 pp_check(m.shrubDensityOBL3, ndraws = 100)
 bayes_R2(m.shrubDensityOBL3)
 loo(m.shrubDensityOBL, m.shrubDensityOBL2, m.shrubDensityOBL3)
+
+
+
+
+## CALCULATE AREA UNDER THE CURVE
+# Compute AUC for predicting Class with the model
+Prob <- predict(Bayes_Model_Binary, type="response")
+Prob <- Prob[,1]
+Pred <- prediction(Prob, as.vector(pull(ThaiEdu_New, REPEAT)))
+AUC <- performance(Pred, measure = "auc")
+AUC <- AUC@y.values[[1]]
+AUC

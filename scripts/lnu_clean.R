@@ -115,7 +115,7 @@ LNU_subplot_native$cover <- as.numeric(LNU_subplot_native$cover)
 
 LNU_subplot_native_long <- LNU_subplot_native %>% 
   group_by(plot_year, spp) %>% 
- dplyr::summarise(cover = sum(cover))
+ dplyr::summarise(cover = mean(cover))
 
 LNU_sub_native_wide <- LNU_subplot_native_long %>% 
   pivot_wider(names_from="spp",
@@ -145,7 +145,7 @@ LNU_subplot_nonnative$cover <- as.numeric(LNU_subplot_nonnative$cover)
 
 LNU_subplot_nonnative_long <- LNU_subplot_nonnative %>% 
   group_by(plot_year, spp) %>% 
-  dplyr::summarise(cover = sum(cover))
+  dplyr::summarise(cover = mean(cover))
 
 LNU_sub_nonnative_wide <- LNU_subplot_nonnative_long %>% 
   pivot_wider(names_from="spp",

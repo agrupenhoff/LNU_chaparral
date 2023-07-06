@@ -22,22 +22,13 @@ library(broom.mixed)
 library(marginaleffects)
 
 LNU_shan_5m2 <- read.csv("data/clean/LNU_subplot_SHANNON_5m2.csv")
-
+LNU_simp_5m2 <- read.csv("data/clean/LNU_subplot_SIMPSON_5m2.csv")
 
 LNU_shan_5m2 %>% 
   filter(PFR != "oak woodland") %>% 
   ggplot(aes(x=num_burn, y=prop.nativeshan, color = as.factor(year)))+
-  geom_point()
-
-LNU_shan_5m2 %>% 
-  filter(PFR != "oak woodland") %>% 
-  ggplot(aes(x=TSLF, y=prop.nativeshan, color = as.factor(year)))+
-  geom_point()
-
-LNU_shan_5m2 %>% 
-  filter(PFR != "oak woodland") %>% 
-  ggplot(aes(x=elevation, y=prop.nativeshan, color = as.factor(year)))+
-  geom_point()
+  geom_point()+
+  geom_smooth(method = "lm")
 
 shannon <- LNU_shan_5m2 %>% 
   filter(PFR != "oak woodland") %>% 
@@ -161,9 +152,19 @@ conditional_effects(m.propnatShan_sq_year_TSLF)
 loo(m.propnatShan, m.propnatShan_sq, m.propnatShan_sq_year, m.propnatShan_sq_year_TSLF)
 
 #CREATE FIGURE
+load("models/nativeShan_sq_year.rda")
 summary(m.propnatShan_sq_year)
 bayes_R2(m.propnatShan_sq_year)
 
+#overall average trend = -0.0407
+emtrends(m.propnatShan_sq_year, ~ 1, var = "num_burn", 
+         regrid = "response")
+
+#slope depends on levels of FF
+m.propnatShan_sq_year %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") 
 
 nd <- shannon %>% 
   data_grid(num_burn=seq(1,6,by=.01),
@@ -203,3 +204,26 @@ ggplot(shannon.fitted, aes(x=num_burn))+
         legend.title = element_blank(),
         legend.text=element_text(size=12))+
   guides(fill = FALSE)
+
+#average marginal effect at different frequencies
+m.propnatShan_sq_year %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") %>% 
+  gather_emmeans_draws() %>% 
+  ggplot(aes(x = .value, fill = factor(num_burn))) +
+  geom_vline(xintercept = 0) +
+  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi",
+               slab_alpha = 0.75)+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  labs(x = "Average marginal effect of fire frequency", 
+       y = "Density", fill = "Fire Frequency",
+       caption = "80% and 95% credible intervals shown in black")+
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))

@@ -59,72 +59,20 @@ plot.description_LNU %>%
 
 ```
 
+# location data
+```{r}
+range(plot.description_LNU$Distance_km)
+unique(plot.description_LNU$Site)
+#[1] "Bobcat"     "CacheCreek" "ColdCanyon" "QuailRidge"
+plot.description_LNU %>% 
+  filter(Site == "QuailRidge") %>% 
+  dplyr::summarise(elevation = mean(distance),
+                   elevation_min = min(elevation),
+                   elevation_max = min(elevation))
 
-
-# Severity 
-
-```{r severity}
-
-
-severity_LNU_clean <- severity_LNU %>% 
-  group_by(PlotID, year) %>% 
-  dplyr::summarise(mean_diam_mm = mean(Mean_diam),
-            sd = sd(Mean_diam),
-            n_obs = n(),
-            se = sd/sqrt(n_obs),
-            max_diam_mm = max(Mean_diam))
-
-severity.plotdescription.LNU <- left_join(severity_LNU_clean, 
-                                          plot.description_LNU, by="PlotID")
-
-
-sevdata <- ddply(severity.plotdescription.LNU, c("num_burn"),
-                 summarise,
-                 N = sum(!is.na(mean_diam_mm)),
-                 mean_diam_mm_avg = mean(mean_diam_mm, na.rm=TRUE),
-                 sd= sd(mean_diam_mm, na.rm = TRUE),
-                 se = sd/sqrt(N),
-                 cv = 100*sd/mean_diam_mm_avg,
-                 
-                 max = mean(max_diam_mm, na.rm = TRUE),
-                 sd_max = sd(max_diam_mm, na.rm = TRUE),
-                 se_max = sd_max/sqrt(N),
-                 cv_max = 100*sd_max/max
-                 ) 
-
-
-ggplot(data=sevdata %>%  
-         filter(num_burn != "2"), 
-       aes(x=as.factor(num_burn), y=mean_diam_mm_avg))+
-  geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))+
-  geom_errorbar(aes(ymin=mean_diam_mm_avg-se, ymax=mean_diam_mm_avg+se), width=.1, size=.7)+
-  #geom_point(size=3, aes(colour=factor(num_burn)))+
-  scale_fill_manual(values = cal_palette("sierra1")) +
-                     xlab("Fire frequency")+
-                     ylab("Fire Severity (mm)")+
-                    theme_bw()+
-                   theme(legend.title = element_blank(),
-                           axis.text = element_text(size=15),
-                            text = element_text(size = 16),
-                          panel.grid = element_blank())
-ggsave(file="figures/sev~freq.svg", width = 4.5, height = 3)
-ggsave(file="figures/sev~freq.png", width = 4.5, height = 3)
-
-
-
-
-
-#LINEAR MODEL
-qqnorm(severity.plotdescription.LNU$mean_diam_mm, pch = 1, frame = FALSE)
-qqline(severity.plotdescription.LNU$mean_diam_mm, col = "steelblue", lwd = 2)
-
-m.sev <- lm(num_burn ~ mean_diam_mm ,
-                 data = severity.plotdescription.LNU, REML = F)
-summary(m.sev)
-coef(summary(m.nativeRich))
-plot(m.sev)
 
 ```
+
 
 # Ground cover data
 
@@ -215,7 +163,7 @@ LNU_sub_nonnative_wide <- LNU_sub_nonnative_wide %>%
 LNU_sub_native_wide <- LNU_sub_native_wide %>% 
   dplyr::select(!X)
 
-
+## SHANNON DIVERSITY
 #sum up the number of non-zero entries per row 
 #first column ignored ([,-1]) since this is the site name, not species count
 
@@ -240,7 +188,33 @@ LNU_shan_final_5m2 <- left_join(LNU_shan_proportion_5m2, plot.description_LNU, b
 
 write.csv(LNU_shan_final_5m2, "data/clean/LNU_subplot_SHANNON_5m2.csv")
 
+## SIMPSON DIVERSITY
+#sum up the number of non-zero entries per row 
+#first column ignored ([,-1]) since this is the site name, not species count
+
+LNU_simpDiv_nonnative <- ddply(LNU_sub_nonnative_wide,~plot_year,function(x) {
+  data.frame(NONNATIVE_SIMPSON=diversity(x[-1], index="simpson"))
+  })
+
+LNU_simpDiv_native <- ddply(LNU_sub_native_wide,~plot_year,function(x) {
+  data.frame(NATIVE_SIMPSON=diversity(x[-1], index="simpson"))
+  })
+
+LNU_simpson <- left_join(LNU_simpDiv_native, LNU_simpDiv_nonnative, by="plot_year")
+
+LNU_simp_proportion_5m2 <- LNU_simpson %>% 
+  mutate_if(is.numeric, ~replace_na(.,0)) %>% 
+  mutate(prop.nativeshan = (NATIVE_SIMPSON/(NATIVE_SIMPSON+ NONNATIVE_SIMPSON)))  %>% 
+  separate(plot_year, c("PlotID", "year"), sep="_") 
+
+
+LNU_simp_final_5m2 <- left_join(LNU_simp_proportion_5m2, plot.description_LNU, by="PlotID")
+
+
+write.csv(LNU_simp_final_5m2, "data/clean/LNU_subplot_SIMPSON_5m2.csv")
+
 ```
+
 
 #prepare total cover file (proportion)
 
