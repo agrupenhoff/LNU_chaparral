@@ -32,7 +32,7 @@ library(forcats) #fct_rev
 library(ggridges)
 library(broom)            # Convert model objects to data frames
 library(broom.mixed)   
-
+library(corrplot)
 #run faster
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -71,22 +71,21 @@ unique(plot.description_LNU$Geology)
 
 #collinearity
 
-hist(propnativeRich_small_5m2$prop.native)
-str(propnativeRich_small_5m2)
-data_5m2 <- propnativeRich_small_5m2[ , c("num_burn", "ppt", "tmean", "elevation", "slope", "hli", "Distance_km")]
-cor(data_5m2) #this looks good!!
-pairs(data_5m2)
+data <- plot.description_LNU[ , c("num_burn", "ppt", "tmean", "elevation", "hli", "TSLF")]
+cor(data) #this looks good!!
+#Spearman’s Rank Correlation Coefficients
+pairs(data)
 
-correlation_matrix <- cor(data_5m2)
-heatmap(correlation_matrix, 
-        main = "Correlation Matrix",
-        col = colorRampPalette(c("blue", "white", "red"))(100))
+correlation_matrix <- cor(data)
 
-plot(as.numeric(plot.description_LNU$TSLF), plot.description_LNU$num_burn)
-
-plot.description_LNU %>% 
-  ggplot(aes(x=TSLF_bin, y=num_burn ))+
-  geom_point()
+corrplot(cor(data),# Correlation matrix
+         method = "circle", # Correlation plot method
+         type = "lower",    # Correlation plot style (also "upper" and "lower")
+         diag = TRUE,      # If TRUE (default), adds the diagonal
+         tl.col = "black", # Labels color
+         bg = "white",     # Background color
+         title = "",       # Main title
+         col = NULL)       # Color palette
 
 
 

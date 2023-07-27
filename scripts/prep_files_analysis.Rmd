@@ -37,6 +37,8 @@ library(broom.mixed)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
+citation("vegan")
+
 ```
 
 # Input clean data

@@ -205,6 +205,7 @@ datagrid(model=m.shrubDensityOBL3,
 
 #CREATE FIGURE
 load("models/shrubDensityOBL2.rda")
+prior_summary(m.shrubDensityOBL2)
 summary(m.shrubDensityOBL2)
 bayes_R2(m.shrubDensityOBL2)
 

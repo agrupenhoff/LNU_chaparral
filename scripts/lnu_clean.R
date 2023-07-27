@@ -25,6 +25,15 @@ subplot_species_LNU$Q5 = as.numeric(subplot_species_LNU$Q5)
 subplot_species_LNU$seedling_resp = toupper(subplot_species_LNU$seedling_resp)
 subplot_species_LNU$cover_count_ht = toupper(subplot_species_LNU$cover_count_ht)
 
+species.short <- SpeciesList %>% 
+  dplyr::select(spp, Lifeform, Native_nonnative, fac.obl) 
+
+
+#add species descriptions to data
+subplot_species_LNU <- left_join(subplot_species_LNU, species.short,
+                                 by = "spp")
+
+
 #SEVERITY DATA
 severity_LNU_byplot <- severity_LNU %>% 
   group_by(PlotID) %>% 
@@ -42,20 +51,6 @@ severity.plotdescription.LNU <- left_join(plot.description.short,severity_LNU_by
 
 write.csv(plot.description.short, "data/clean/PlotDescription_clean.csv")
 write.csv(severity.plotdescription.LNU,"data/clean/LNU_severity.plotdescription.csv" )
-
-
-species.short <- SpeciesList %>% 
-  dplyr::select(spp, Lifeform, Native_nonnative, fac.obl) 
-
-
-#add species descriptions to data
-subplot_species_LNU <- left_join(subplot_species_LNU, species.short,
-                                 by = "spp")
-
-
-
-str(subplot_species_LNU)
-
 
 #file for NMDS
 
@@ -300,13 +295,31 @@ shrub_height <- subplot_species_LNU %>%
   mutate(plot_year = paste(PlotID, year, sep="_")) %>% 
   mutate(plot_spp = paste(plot_year, spp, seedling_resp, by=" ")) %>% 
   dplyr::select(plot_spp, Q1, Q2, Q3, Q4, Q5) %>% 
-  mutate_if(is.numeric, ~replace_na(., 0)) %>% 
-  mutate(avg.ht = (Q1+Q2+Q3+Q4+Q5)/5,
-         sum.ht = Q1+Q2+Q3+Q4+Q5) %>% 
-  dplyr::select(plot_spp, avg.ht, sum.ht) %>% 
+  pivot_longer(!plot_spp, names_to = "quad", values_to = "postfire_ht_cm") %>% 
+  drop_na(postfire_ht_cm) %>% 
+  select(plot_spp, postfire_ht_cm) %>% 
   separate(plot_spp, c("plot_year", "spp", "seedling_resp"), sep=" ") %>% 
-  separate(plot_year, c("PlotID", "year"), sep="_")
+  separate(plot_year, c("PlotID", "year"), sep="_") %>% 
+  #filter out seedlings - only care about resprouts!!
+  filter(seedling_resp == "RESPROUT") %>% 
+  filter(postfire_ht_cm >0) %>% 
+  mutate(status = "L") %>% 
+  mutate(postfire_ht_m = postfire_ht_cm/100) %>% 
+  select(PlotID, year, spp, status, postfire_ht_m) %>% 
+  mutate(prefire_ht_m = " ",
+         diam_largest_stem_cm = " ",
+         obs = "ARG") %>% 
+ as.data.frame()
 
-shrub_height$year <- as.numeric(shrub_height$year)
+mortality <- Mortality_LNU %>% 
+  mutate(year = 2021,
+         obs = "HDS") 
 
-write.csv(shrub_height, "data/clean/shrub_height.csv")
+str(shrub_height)
+str(mortality)
+
+shrub_height_all <- rbind(mortality, shrub_height)
+
+shrub_height_all$year <- as.numeric(shrub_height_all$year)
+
+write.csv(shrub_height_all, "data/clean/shrub_height.csv")

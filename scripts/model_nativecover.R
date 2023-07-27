@@ -51,6 +51,10 @@ propnativeCover$TSLF_bin <- as.factor(propnativeCover$TSLF_bin)
 str(propnativeCover)
 range(propnativeCover$cover)
 
+pairs(~ Sepal.Length + Sepal.Width + Petal.Length + Petal.Width, 
+      data = propnativeCover)
+
+
 propnativeCover <- propnativeCover %>% 
   #can't have exactly 0 or 1
   mutate(cover = ifelse(cover == 1, 0.999, cover))
@@ -157,7 +161,7 @@ loo(m.propnatCover_sq_year_TSLF, m.propnatCover_sq, m.propnatCover_sq_year)
 #CREATE FIGURE 
 load("models/nativeCover_numburn_sq_year.rda")
 
-
+prior_summary(m.propnatCover_sq_year)
 summary(m.propnatCover_sq_year)
 bayes_R2(m.propnatCover_sq_year)
 
