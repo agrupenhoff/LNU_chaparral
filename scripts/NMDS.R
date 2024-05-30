@@ -1,6 +1,7 @@
 library(vegan)
 library(dplyr)
 library(tidyverse)
+library(ggrepel)
 
 LNU_combine_wide <- read.csv("data/clean/LNU_species_all_wide.csv")
 
@@ -69,4 +70,6 @@ ggplot(nmds_plot, aes(x=MDS1, y=MDS2))+
         legend.text = element_text(size=12),
         legend.title = element_text(size=11))
 
-ggsave(file="figures/NMDS.png", width = 10, height = 6)
+ggsave(file="figures/fig4_NMDS.png", 
+       width = 8, height = 6,
+       dpi = 600)

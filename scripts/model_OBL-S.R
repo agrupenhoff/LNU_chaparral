@@ -72,7 +72,7 @@ pairs(shrub_density_OBLS[,c("num_burn","TSLF",
                             "hli","slope",
                             "ppt","tmean","elevation")])
 
-ggplot(shrub_density_250_OBLS, aes(x=TSLF, y=presence,
+ggplot(shrub_density_250_OBLS, aes(x=num_burn, y=presence,
                                color=spp))+
   geom_point()+
   geom_jitter()
@@ -203,7 +203,7 @@ datagrid(model=m.shrubDensityOBL3,
   scale_fill_brewer(palette = "Blues")
 
 
-#CREATE FIGURE
+#CREATE FIGURE ####
 load("models/shrubDensityOBL2.rda")
 prior_summary(m.shrubDensityOBL2)
 summary(m.shrubDensityOBL2)
@@ -343,6 +343,28 @@ AUC <- performance(Pred, measure = "auc")
 AUC <- AUC@y.values[[1]]
 AUC
 #area under the curve = 0.900 which seems super good!!
+
+nd_coarse <- shrub_density_OBLS %>% 
+  data_grid(num_burn=seq(1,6,by=1),
+            year=c(2021, 2022))
+
+CEACUN.fitted_coarse <- 
+  fitted(m.shrubDensityCEACUN, 
+         newdata= nd_coarse,
+         scale = "response",
+         probs = c(0.05, 0.95)) %>% 
+  as.data.frame() %>% 
+  cbind(nd) %>% 
+  mutate(spp = "CEACUN")
+
+CEAOLI.fitted_coarse <- 
+  fitted(m.shrubDensityCEAOLI, 
+         newdata= nd_coarse,
+         scale = "response",
+         probs = c(0.05, 0.95)) %>% 
+  as.data.frame() %>% 
+  cbind(nd) %>% 
+  mutate(spp = "CEAOLI")
 
 nd <- shrub_density_OBLS %>% 
   data_grid(num_burn=seq(1,6,by=.01),

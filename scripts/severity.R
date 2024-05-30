@@ -2,6 +2,12 @@
 library(ggplot2)
 library(tidyverse)
 library(dplyr)
+library(plyr)
+library(calecopal)
+library(devtools)
+
+devtools::install_github("an-bui/calecopal")
+
 
 
 plot.description_LNU <- read.csv("data/clean/LNU_plot_description_CLEAN.csv")
@@ -42,7 +48,7 @@ sevdata <- ddply(severity_LNU_clean, c("num_burn"),
 ) 
 
 
-ggplot(data=sevdata %>%  
+severity_LNU <- ggplot(data=sevdata %>%  
          filter(num_burn != "2"), 
        aes(x=as.factor(num_burn), y=mean_diam_mm_avg))+
   geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))+
@@ -50,26 +56,24 @@ ggplot(data=sevdata %>%
   #geom_point(size=3, aes(colour=factor(num_burn)))+
   scale_fill_manual(values = cal_palette("sierra1")) +
   xlab("Fire frequency")+
-  ylab("Fire Severity (mm)")+
+  ylab("Diameter of stem terminus (mm)")+
   theme_bw()+
   theme(legend.title = element_blank(),
         axis.text = element_text(size=15),
         text = element_text(size = 16),
         panel.grid = element_blank())
+severity_LNU
 
-ggplot(data=sevdata %>%  
-         filter(num_burn != "2"), 
-       aes(x=as.factor(num_burn), y=cv))+
-  geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))
+ggsave("figures/fig2_severity.png", severity_LNU,
+       #width = 10, 
+       #height = 12,
+       #units = 'in',
+       dpi=600)
+
 
 severity_LNU$num_burn <- as.factor(severity_LNU$num_burn)
 severity_LNU_clean$num_burn <- as.factor(severity_LNU_clean$num_burn)
 
-severity_LNU_clean %>% 
-  ggplot(aes(x=as.factor(TSLF), y=mean_diam_mm,
-             color = num_burn))+
-  # geom_point()+
-  geom_boxplot()
 
 fire_severity_brm <- brm(mean_diam_mm ~ num_burn,
                          data = severity_LNU_clean %>% filter(num_burn !="2"),
@@ -125,7 +129,9 @@ sevdata_quad <- ddply(severity_LNU_clean_quad, c("num_burn"),
 ) 
 
 
-ggplot(data=sevdata_quad %>%  
-         filter(num_burn != "2"), 
-       aes(x=as.factor(num_burn), y=cv))+
-  geom_bar(stat = "identity", aes(fill= as.factor(num_burn)))
+ggsave("figures/post_trt_figz/overstory_AME.png", overstory_AME,
+       width = 10, 
+       height = 12,
+       units = 'in',
+       dpi=600)
+

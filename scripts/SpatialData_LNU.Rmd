@@ -125,15 +125,28 @@ geom_sf(data = lnu_resolvedata,
 ```{r prism}
 # load temp and precip
 getwd()
-ppt = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_ppt_30yr_normal_800mM3_annual_bil/PRISM_ppt_30yr_normal_800mM3_annual_bil.bil")
-tmean = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PRISM_tmean_30yr_normal_800mM3_annual_bil/PRISM_tmean_30yr_normal_800mM3_annual_bil.bil")
+
+ppt = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/PPT_PRISM_30yr_normal_800mM3_annual_bil/PRISM_ppt_30yr_normal_800mM3_annual_bil.bil")
+
+tmean = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/TMEAN_PRISM_30yr_normal_800mM3_annual_bil/PRISM_tmean_30yr_normal_800mM3_annual_bil.bil")
 tmean
+
+tmin_july = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/TMIN_JULY_PRISM_30yr_normal_800mM4_bil/PRISM_tmin_30yr_normal_800mM4_07_bil.bil")
+tmax_july = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/TMAX_JULY_PRISM_30yr_normal_800mM4_bil/PRISM_tmax_30yr_normal_800mM4_07_bil.bil")
+
+tmin_jan = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/TMIN_JAN_PRISM_30yr_normal_800mM4_bil/PRISM_tmin_30yr_normal_800mM4_01_bil.bil")
+tmax_jan = rast("/Users/ashleygrup/Documents/LOCAL_REPO_DATA/prism/TMAX_JAN_PRISM_30yr_normal_800mM4_bil/PRISM_tmax_30yr_normal_800mM4_01_bil.bil")
+
 # load plots
 plots = st_read("data/clean/spatial/LNU_spatialData/LNU_spatialData.shp")
 
 # extract ppt and tmean at plots
 plots$ppt = terra::extract(ppt,vect(plots))[,2]
 plots$tmean = terra::extract(tmean,vect(plots))[,2]
+plots$tmin_jan = terra::extract(tmin_jan,vect(plots))[,2]
+plots$tmax_jan = terra::extract(tmax_jan,vect(plots))[,2]
+plots$tmin_july = terra::extract(tmin_july,vect(plots))[,2]
+plots$tmax_july = terra::extract(tmax_july,vect(plots))[,2]
 
 
 # trim the data frame to UniquID and cliamte data only
@@ -144,7 +157,11 @@ st_geometry(plots_simple) = NULL # make it non-spatial (just a data frame)
 # write
 write_csv(plots_simple,"data/clean/spatial/lnu_plot_climate.csv")
 
-
+mean(plots$tmin_july)
+mean(plots$tmax_july)
+mean(plots$tmin_jan)
+mean(plots$tmax_jan)
+range(plots$ppt)
 ```
 
 # DEM (digital elevation model)

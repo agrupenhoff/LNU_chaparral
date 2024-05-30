@@ -38,6 +38,15 @@ ggplot(LNU_richness_5m2 %>%  filter(PFR != "oak woodland") ,
 propnativeRich_5m2 <- LNU_richness_5m2 %>% 
   filter(PFR != "oak woodland") 
 
+# Summarize prop native rich
+sum_proprich <- propnativeRich_5m2 %>% 
+  group_by(num_burn) %>% 
+  dplyr::summarise(mean_rich = mean(prop.native),
+                   sd_rich = sd(prop.native),
+                   n_rich = n(),
+                   se_rich = sd_rich/sqrt(n_rich))
+# 46% decrease in prop_native Cover from 1 to 6 FF 
+
 propnativeRich_5m2 %>% 
   dplyr::count(TSLF_bin)
 
@@ -250,4 +259,5 @@ m.propnatRich_sq_year %>%
         axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 20),
         legend.title = element_blank(),
-        legend.text=element_text(size=12))
+        legend.text=element_text(size=12))+
+  ggtitle("Proportion Native Species Richness")

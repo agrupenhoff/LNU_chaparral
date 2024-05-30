@@ -29,7 +29,7 @@
      inkscape:document-units="mm"
      showgrid="false"
      inkscape:zoom="0.67521728"
-     inkscape:cx="527.97819"
+     inkscape:cx="453.92796"
      inkscape:cy="414.68133"
      inkscape:window-width="1440"
      inkscape:window-height="786"
@@ -80,7 +80,13 @@
          y="14.890268" /></clipPath></defs><g
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
-     id="layer1"><image
+     id="layer1"><rect
+       style="fill:#ffffff;stroke-width:3.96499"
+       id="rect3145"
+       width="295.45428"
+       height="209.6393"
+       x="0.39184916"
+       y="0.78369832" /><image
        width="132.75534"
        height="107.70667"
        preserveAspectRatio="none"

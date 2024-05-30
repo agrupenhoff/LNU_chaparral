@@ -39,6 +39,15 @@ propnativeCover <- LNU_cover_final %>%
   filter(PFR != "oak woodland"&
            native.nonnative.prop == "prop_native_cover") 
 
+# Summarize prop native cover 
+sum_propcover <- propnativeCover %>% 
+  group_by(num_burn) %>% 
+  dplyr::summarise(mean_cover = mean(cover),
+                   sd_cover = sd(cover),
+                   n_cover = n(),
+                   se_cover = sd_cover/sqrt(n_cover))
+# 46% decrease in prop_native Cover from 1 to 6 FF 
+
 propnativeCover %>% 
   dplyr::count(TSLF)
 
@@ -50,9 +59,6 @@ propnativeCover$TSLF_bin <- as.factor(propnativeCover$TSLF_bin)
 
 str(propnativeCover)
 range(propnativeCover$cover)
-
-pairs(~ Sepal.Length + Sepal.Width + Petal.Length + Petal.Width, 
-      data = propnativeCover)
 
 
 propnativeCover <- propnativeCover %>% 

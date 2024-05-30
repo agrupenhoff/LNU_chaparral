@@ -160,6 +160,12 @@ bayes_R2(m.propnatShan_sq_year)
 emtrends(m.propnatShan_sq_year, ~ 1, var = "num_burn", 
          regrid = "response")
 
+
+m.propnatShan_sq_year %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") 
+
 #slope depends on levels of FF
 m.propnatShan_sq_year %>% 
   emtrends(~ num_burn, var = "num_burn",
@@ -226,4 +232,5 @@ m.propnatShan_sq_year %>%
         axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 20),
         legend.title = element_blank(),
-        legend.text=element_text(size=12))
+        legend.text=element_text(size=12))+
+  ggtitle("Proportion Native Shannon Diversity")

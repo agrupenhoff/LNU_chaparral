@@ -65,6 +65,16 @@ resprout_mortality %>%
 #generally we so no reduction in postfire resprout height due to 
 #fire frequency
 
+# NUM BURN ~ NUMBER OF RESPROUTS
+
+resprout_mortality %>% 
+  filter(spp=="ADFA") %>% 
+  filter(obs=="ARG") %>% 
+  group_by(PlotID, year, num_burn) %>% 
+  tally()
+  ggplot(aes(x=as.factor(num_burn), y= n, color= as.factor(year)))+
+    geom_point()
+
 # PREFIRE HT ~ POST FIRE HEIGHT
 resprout_mortality %>% 
   ggplot(aes(x=prefire_ht_m, y=postfire_ht_m, color=as.factor(spp)))+
@@ -94,6 +104,9 @@ ADFA_mortality_2021 %>%
   ggplot(aes(x=num_burn, y=postfire_ht_m, color=as.factor(year)))+
   geom_smooth(method = "lm")+
   geom_jitter()
+
+mean(ADFA_mortality_2021$postfire_ht_m)
+
 ADFA_mortality_2021 %>% 
   ggplot(aes(x=tmean.scale, y=postfire_ht_m, color=as.factor(year)))+
   geom_smooth(method = "lm")+
@@ -175,79 +188,14 @@ load("models/ADFA_resp_model7.rda")
 print(ADFA_resp_model7)
 loo(ADFA_resp_model7)
 
-ADFA_resp_model_FULL <- brm(sqrt(postfire_ht_m) ~ 1 + num_burn +
-                                                  diam_largest_stem_cm +
-                                                  hli.scale, 
-                        data=ADFA_mortality_2021, 
-                        family=gaussian(),
-                        prior = c(prior(normal(0,1), class = Intercept)),
-                        chains=2,iter=2000, cores=4)
-save(ADFA_resp_model_FULL, file = "models/ADFA_resp_model_FULL.rda")
-load("models/ADFA_resp_model_FULL.rda")
+
+tab_model(ADFA_resp_model7)
+print(ADFA_resp_model7)
+plot(conditional_effects(ADFA_resp_model7), points =TRUE)
+pp_check(ADFA_resp_model7, ndraws = 100)
+bayes_R2(ADFA_resp_model7)
 
 
-tab_model(ADFA_resp_model_FULL)
-print(ADFA_resp_model_FULL)
-plot(conditional_effects(ADFA_resp_model_FULL), points =TRUE)
-pp_check(ADFA_resp_model_FULL, ndraws = 100)
-bayes_R2(ADFA_resp_model_FULL)
-loo(ADFA_resp_model_FULL)
-#num burn = 118.9
-#prefire ht = 118.4
-#diam largest stem = 120.2
-#hli = 118.9
-
-FAC_resp_model <- brm(sqrt(postfire_ht_m) ~ 1 + num_burn, 
-                      data=resprout_mortality, 
-                      family=gaussian(),
-                      prior = c(prior(normal(0,1), class = Intercept)),
-                     chains=2,iter=1000, cores=4)
-save(FAC_resp_model, file = "models/FAC_resp_model.rda")
-load("models/FAC_resp_model.rda")
-
-tab_model(FAC_resp_model)
-print(FAC_resp_model)
-plot(conditional_effects(FAC_resp_model), points =TRUE)
-pp_check(FAC_resp_model, ndraws = 100)
-bayes_R2(FAC_resp_model)
-
-
-FAC_resp_model_tmean <- brm(log(avg.ht) ~  num_burn + tmean.scale, 
-                      data=resprout_ht_FAC, 
-                      family=gaussian(),
-                      prior = c(prior(normal(0,1), class = Intercept)),
-                      chains=2,iter=1000, cores=4)
-
-save(FAC_resp_model_tmean, file = "models/FAC_resp_model_tmean.rda")
-load(file = "models/FAC_resp_model_tmean.rda")
-
-print(FAC_resp_model_tmean)
-tab_model(FAC_resp_model_tmean)
-plot(conditional_effects(FAC_resp_model_tmean), points =TRUE)
-pp_check(FAC_resp_model_tmean, ndraws = 100)
-bayes_R2(FAC_resp_model_tmean)
-loo(FAC_resp_model, FAC_resp_model_tmean)
-
-
-FAC_resp_model_tmean_hli <- brm(log_ht ~  num_burn + tmean.scale + hli.scale, 
-                         data=resprout_ht_FAC, 
-                         family=gaussian(),
-                         prior = c(prior(normal(0,1), class = Intercept)),
-                         chains=2,iter=1000, cores=4)
-
-save(FAC_resp_model_tmean_hli, file = "models/FAC_resp_model_tmean_hli.rda")
-load(file = "models/FAC_resp_model_tmean_hli.rda")
-
-loo(FAC_resp_model, FAC_resp_model_tmean, FAC_resp_model_tmean_hli)
-loo(FAC_resp_model_tmean_hli)
-kfold(FAC_resp_model_tmean_hli, K=10)
-median(loo_R2(FAC_resp_model_tmean_hli))
-
-tab_model(FAC_resp_model_tmean)
-print(FAC_resp_model_tmean)
-plot(conditional_effects(FAC_resp_model_tmean), points =TRUE)
-pp_check(FAC_resp_model_tmean, ndraws = 100)
-bayes_R2(FAC_resp_model_tmean)
 
 ## perform one-sided hypothesis testing
 resp_hypothesis <- c(resp_hypothesis = "num_burn < 0")
@@ -265,7 +213,7 @@ ggplot(ADFA_mortality_2021, aes(x = num_burn, y = postfire_ht_m)) +
     geom_point(size = 1) + 
     geom_smooth(method = "lm", color = "#F012BE") 
 
-ggplot(ADFA_mortality_2021, aes(x = prefire_ht_m, y = postfire_ht_m)) +
+ggplot(ADFA_mortality_2021, aes(x = hli, y = postfire_ht_m)) +
   geom_point(size = 1) + 
   geom_smooth(method = "lm", color = "#F012BE") 
 
@@ -289,18 +237,18 @@ ADFA_resp_model7 |>
   ggplot(aes(x = num_burn)) +
   geom_smooth(aes(y = .value, 
                   ymin = .lower, ymax = .upper),
-                  stat = "identity", 
-                  fill =  "#985E5C",
+                  stat = "identity",
                     alpha = 1/4)+
-  geom_point(aes(y = .value, color = "#985E5C" ),
+  geom_point(aes(y = .value),
              size = 2/3)+
-  geom_jitter(data=ADFA_mortality_2021, 
-              aes(x=num_burn, y=(postfire_ht_m)), alpha =.2)+
+ #geom_jitter(data=ADFA_mortality_2021, 
+#             aes(x=num_burn, y=(postfire_ht_m)), alpha =.2)+
+  ylim(0,1)+
   labs(x="Fire Frequency", y= "Resprout Height (m)",
        fill="credible interval",
        title = "")+
-  scale_color_manual(values = c( "#985E5C")) +
-  scale_fill_manual(values = c( "#985E5C")) +
+  #scale_color_manual(values = c( "#985E5C")) +
+  #cale_fill_manual(values = c( "#985E5C")) +
   theme(legend.position = "bottom")+
   theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
@@ -352,4 +300,21 @@ ADFA_resp_model7 |>
         legend.title = element_blank(),
         legend.position = "none")+
   guides(fill = FALSE)
+
+
+
+#total mortality 
+shrub_mortality<- shrub_ht %>% 
+  filter(fac.obl == "FAC") %>% 
+  filter(spp != "AESCAL" &
+           spp != "RIBMAL"&
+           spp != "MIMAUR")
+
+shrub_mortality %>% 
+  filter(obs=="HDS") %>% 
+  filter(spp == "ADFA") %>% 
+  ggplot(aes(x=status, fill=as.factor(num_burn)))+
+  geom_bar(position = "dodge")
+  #geom_smooth(method = "lm")+
+  geom_jitter()
 
