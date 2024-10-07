@@ -31,9 +31,9 @@ library(brmsmargins)
 #full separation of the outcome. See page 256 of Regression and other 
 #stories for more information.
 
+prior()
 
-
-#####DENSITY
+## UPLOAD DATA ####
 shrub_density_250 <- read.csv("data/clean/shrub_seedling_presence_250.csv")
 
 shrub_seedling_data <- read.csv("data/clean/shrub_seedling_data_ALL.csv")
@@ -77,6 +77,7 @@ ggplot(shrub_density_250_OBLS, aes(x=num_burn, y=presence,
   geom_point()+
   geom_jitter()
 
+## RUN MODELS ####
 
 priors <- c(set_prior("normal(0,1)", class = "b"),
             set_prior("student_t(3, 0, 1)", class = "Intercept"))
@@ -161,6 +162,7 @@ conditional_effects(m.shrubDensityOBL2_250)
 plot(m.shrubDensityOBL2_250)
 pp_check(m.shrubDensityOBL2_250, ndraws = 100)
 bayes_R2(m.shrubDensityOBL2_250)
+get_prior(m.shrubDensityOBL2)
 
 loo(m.shrubDensityOBL_250,m.shrubDensityOBL2_250)
 
@@ -203,7 +205,7 @@ datagrid(model=m.shrubDensityOBL3,
   scale_fill_brewer(palette = "Blues")
 
 
-#CREATE FIGURE ####
+## CREATE FIGURE ####
 load("models/shrubDensityOBL2.rda")
 prior_summary(m.shrubDensityOBL2)
 summary(m.shrubDensityOBL2)
@@ -238,16 +240,7 @@ OBL.fitted <-
   as.data.frame() %>% 
   cbind(nd)
 
-OBL.fitted.250 <- 
-  fitted(m.shrubDensityOBL2_250, 
-         newdata= nd,
-         scale = "response",
-         probs = c(0.05, 0.95)) %>% 
-  as.data.frame() %>% 
-  cbind(nd)
-
-
-OBL.plot <- ggplot(OBL.fitted.250, aes(x=num_burn))+
+OBL.plot <- ggplot(OBL.fitted, aes(x=num_burn))+
   geom_smooth(aes(y = Estimate, 
                   ymin = Q5, ymax = Q95,
                   fill = as.factor(year), 
@@ -257,8 +250,9 @@ OBL.plot <- ggplot(OBL.fitted.250, aes(x=num_burn))+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   xlim(1,6)+
-  labs(x="Fire Frequency", y= "Proability of occurence",
-       fill="credible interval")+
+  labs(x="Fire frequency", y= "Probability of occurence",
+       fill="credible interval",
+       title = " ")+
   scale_color_manual(values = c("mediumpurple", "seagreen4")) +
   scale_fill_manual(values = c("mediumpurple", "seagreen4")) +
   theme(legend.position = "bottom")+
@@ -268,20 +262,20 @@ OBL.plot <- ggplot(OBL.fitted.250, aes(x=num_burn))+
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 20),
+        title = element_text(size = 15),
         legend.title = element_blank(),
         legend.text=element_text(size=12))+
   guides(fill = FALSE)
 OBL.plot
 
+## BY INDIVIDUAL SPECIES ####
 
-#####
-#####
-# BY INDIVIDUAL SPECIES
-
+#### CEACUN ####
 shrub_density_CEACUN <- shrub_density_250 %>%
   filter(spp == "CEACUN")
 shrub_density_CEACUN$year <- as.factor(shrub_density_CEACUN$year)
 
+#### run model ####
 m.shrubDensityCEACUN <- brm(data = shrub_density_CEACUN,
                           presence ~ 1 + num_burn + year,
                           family = bernoulli(),
@@ -311,6 +305,7 @@ AUC <- AUC@y.values[[1]]
 AUC
 #area under the curve = 0.872 which seems super good!!
 
+#### CEAOLI ####
 shrub_density_CEAOLI <- shrub_density_250 %>%
   filter(spp == "CEAOLI") 
 
@@ -344,6 +339,7 @@ AUC <- AUC@y.values[[1]]
 AUC
 #area under the curve = 0.900 which seems super good!!
 
+# CREATE INDIVIDUAL MODELS ####
 nd_coarse <- shrub_density_OBLS %>% 
   data_grid(num_burn=seq(1,6,by=1),
             year=c(2021, 2022))
@@ -354,7 +350,7 @@ CEACUN.fitted_coarse <-
          scale = "response",
          probs = c(0.05, 0.95)) %>% 
   as.data.frame() %>% 
-  cbind(nd) %>% 
+  cbind(nd_coarse) %>% 
   mutate(spp = "CEACUN")
 
 CEAOLI.fitted_coarse <- 
@@ -363,7 +359,7 @@ CEAOLI.fitted_coarse <-
          scale = "response",
          probs = c(0.05, 0.95)) %>% 
   as.data.frame() %>% 
-  cbind(nd) %>% 
+  cbind(nd_coarse) %>% 
   mutate(spp = "CEAOLI")
 
 nd <- shrub_density_OBLS %>% 
@@ -389,20 +385,20 @@ CEACUN.plot <- ggplot(CEACUN.fitted, aes(x=num_burn))+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   xlim(1,6)+
-  labs(x="Fire Frequency", y= "Proability of occurence",
+  labs(x="Fire frequency", y= "Probability of occurence",
        fill="credible interval",
-       title = "Ceanothus cuneatus")+
+       title = "")+
   scale_color_manual(values = c("#63605F", "#985E5C")) +
   scale_fill_manual(values = c("#63605F", "#985E5C")) +
   theme(legend.position = "bottom")+
   theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
-        plot.title=element_text(face="italic"),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 20),
         legend.title = element_blank(),
+        title = element_text(size = 15),
         legend.text=element_text(size=12))+
   guides(fill = FALSE)
 CEACUN.plot
@@ -427,15 +423,15 @@ CEAOLI.plot <- ggplot(CEAOLI.fitted, aes(x=num_burn))+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   xlim(1,6)+
-  labs(x="Fire Frequency", y= "Proability of occurence",
+  labs(x="Fire frequency", y= "Probability of occurence",
        fill="credible interval",
-       title = "Ceanothus oliganthus")+
+       title = "")+
   scale_color_manual(values = c("#63605F", "#985E5C")) +
   scale_fill_manual(values = c("#63605F", "#985E5C")) +
   theme(legend.position = "bottom")+
   theme(legend.position = "bottom")+
   theme(panel.grid   = element_blank(),
-        plot.title=element_text(face="italic"),
+        title = element_text(size = 15),
         axis.ticks.y = element_blank(),
         axis.text.y  = element_text(hjust = 0, size = 15),
         axis.text.x = element_text(size = 15),
@@ -445,9 +441,12 @@ CEAOLI.plot <- ggplot(CEAOLI.fitted, aes(x=num_burn))+
   guides(fill = FALSE)
 CEAOLI.plot
 
+OBL.plot
+CEACUN.plot
+CEAOLI.plot
 
 
-### LOOK AT TSLF
+### LOOK AT TSLF ####
 str(shrub_density_250_OBLS)
 m.shrubDensityOBL_TSLF <- brm(data = shrub_density_OBLS,
                           presence ~ 1 + TSLF + year ,

@@ -76,9 +76,18 @@ cor(data) #this looks good!!
 #Spearman’s Rank Correlation Coefficients
 pairs(data)
 
+#rename 
+data_rename <- data %>% 
+  dplyr::rename(NumberBurns = "num_burn",
+                AnnualPrecipitation = "ppt",
+                AnnualTemperature = "tmean",
+                Elevation = "elevation",
+                HeatLoadIndex = "hli",
+                TimeSinceLastFire = "TSLF")
+
 correlation_matrix <- cor(data)
 
-corrplot(cor(data),# Correlation matrix
+corrplot(cor(data_rename),# Correlation matrix
          method = "circle", # Correlation plot method
          type = "lower",    # Correlation plot style (also "upper" and "lower")
          diag = TRUE,      # If TRUE (default), adds the diagonal

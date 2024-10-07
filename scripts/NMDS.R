@@ -3,13 +3,16 @@ library(dplyr)
 library(tidyverse)
 library(ggrepel)
 
+#Insert data
+# NOTE data has species as column titles, with one column as "plot_year"
+
 LNU_combine_wide <- read.csv("data/clean/LNU_species_all_wide.csv")
 
 #make community matrix on which to base ordination
 LNUspecies = LNU_combine_wide %>% 
   dplyr::select(!c("plot_year","X")) 
 
-#columns that contain descriptive data
+#columns that contain descriptive data (not species names)
 LNUplot_ord = LNU_combine_wide %>% 
   dplyr::select(plot_year) %>% 
   separate(plot_year, c("PlotID", "year"), sep="_") 
@@ -35,7 +38,7 @@ nmds_species <- left_join(nmds_species, species.short, by = "spp")
 nmds_plot$num_burn <- as.factor(nmds_plot$num_burn)
 
 
-#significant species 
+#pull out dominant species 
 LNU.spp.fit <- envfit(NMDS, LNUspecies, permutations = 999 )
 spp.scrs <- as.data.frame(scores(LNU.spp.fit, display = "vectors")) 
 #save species intrinsic values into dataframe
@@ -46,8 +49,8 @@ spp.scrs <- cbind(spp.scrs, pval = LNU.spp.fit$vectors$pvals)
 sig.spp.scrs <- subset(spp.scrs, pval<=0.05) #subset data to show species significant at 0.05
 
 head(spp.scrs)
-
-
+nmds_plot
+#plot
 ggplot(nmds_plot, aes(x=MDS1, y=MDS2))+
   geom_point(size = 4, aes(x=MDS1, y=MDS2, color = num_burn))+
   geom_segment(data = sig.spp.scrs, 
@@ -56,14 +59,15 @@ ggplot(nmds_plot, aes(x=MDS1, y=MDS2))+
                colour = "grey10", lwd=0.3) +
   #add vector arrows of significant species
   ggrepel::geom_text_repel(data = sig.spp.scrs, 
-                           aes(x=NMDS1, y=NMDS2, label = Species), 
-                           cex = 3, direction = "both", segment.size = 0.25)+ 
+                          aes(x=NMDS1, y=NMDS2, label = Species), 
+                          cex = 3, direction = "both", segment.size = 0.25)+ 
   #add labels for species, use ggrepel::geom_text_repel so that labels do not overlap
   #geom_point(data= nmds_species, size = 1.8, alpha = 0.5, aes(x=MDS1, y=MDS2, 
   #                                               shape = Native_nonnative))+
   stat_ellipse(aes(x=MDS1, y=MDS2, color = num_burn))+
-  scale_color_viridis_d(option = "magma")+
-  guides(col=guide_legend("Fire Frequency"))+
+  #scale_color_viridis_d(option = "magma")+
+  scale_color_manual(values = cal_palette("kelp1")) +
+  guides(col=guide_legend("Fire frequency"))+
   theme(axis.text = element_text(size=15),
         text = element_text(size = 16),
         panel.grid = element_blank(),

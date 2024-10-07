@@ -26,7 +26,7 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 
-
+# Add Data ####
 LNU_cover_final <- read.csv("data/clean/LNU_speciesCover_FINAL.csv")
 
 ggplot(LNU_cover_final %>%  filter(PFR != "oak woodland" &
@@ -35,11 +35,17 @@ ggplot(LNU_cover_final %>%  filter(PFR != "oak woodland" &
   geom_point()+
   geom_smooth(method="loess")
 
+
+ggplot(LNU_cover_final %>%  filter(PFR != "oak woodland" &
+                                     native.nonnative.prop == "prop_native_cover") , 
+       aes(x=Site, y=num_burn))+
+  geom_boxplot()
+
 propnativeCover <- LNU_cover_final %>% 
   filter(PFR != "oak woodland"&
            native.nonnative.prop == "prop_native_cover") 
 
-# Summarize prop native cover 
+## Summarize prop native cover ####
 sum_propcover <- propnativeCover %>% 
   group_by(num_burn) %>% 
   dplyr::summarise(mean_cover = mean(cover),
@@ -49,7 +55,7 @@ sum_propcover <- propnativeCover %>%
 # 46% decrease in prop_native Cover from 1 to 6 FF 
 
 propnativeCover %>% 
-  dplyr::count(TSLF)
+  dplyr::count(cool_warm_slope)
 
 propnativeCover$num_burn <- as.numeric(propnativeCover$num_burn)
 propnativeCover$year <- as.factor(propnativeCover$year)
@@ -65,7 +71,7 @@ propnativeCover <- propnativeCover %>%
   #can't have exactly 0 or 1
   mutate(cover = ifelse(cover == 1, 0.999, cover))
 
-#CENTER AND SCALE COVARIATES
+## CENTER AND SCALE COVARIATES ####
 propnativeCover$ppt.scale <- scale(propnativeCover$ppt, 
                                             center = TRUE, scale = TRUE)
 propnativeCover$tmean.scale <- scale(propnativeCover$tmean, 
@@ -78,7 +84,7 @@ propnativeCover$elevation.scale <- scale(propnativeCover$elevation,
                                                   center = TRUE, scale = TRUE)
 
 
-######## run model with each predictor variable seperately 
+# Run model: num_burn only ####
 m.propnatCover_numburn <- brm(
   bf(cover ~ 1 + num_burn, 
      phi ~ num_burn),
@@ -95,6 +101,7 @@ pp_check(m.propnatCover_numburn, ndraw=100)
 tidy(m.propnatCover_numburn)
 bayes_R2(m.propnatCover_numburn)
 
+# Run model: TSLF only ####
 m.propnatCover_TSLF <- brm(
   bf(cover ~ 1 + TSLF, 
      phi ~ TSLF),
@@ -112,6 +119,7 @@ bayes_R2(m.propnatCover_TSLF)
 
 loo(m.propnatCover_numburn, m.propnatCover_TSLF)
 
+# Run model: Num_burn squared ####
 m.propnatCover_sq <- brm(
   bf(cover ~ 1 + num_burn + I(num_burn^2), 
      phi ~ num_burn+ I(num_burn^2)),
@@ -128,6 +136,7 @@ conditional_effects(m.propnatCover_sq)
 pp_check(m.propnatCover_sq, ndraw=100)
 bayes_R2(m.propnatCover_sq)
 
+# Run Model: Num burn square + year ####
 m.propnatCover_sq_year <- brm(
   bf(cover ~ 1 + num_burn + I(num_burn^2) + year, 
      phi ~ num_burn+ I(num_burn^2) + year),
@@ -142,10 +151,13 @@ summary(m.propnatCover_sq_year)
 tab_model(m.propnatCover_sq_year)
 pp_check(m.propnatCover_sq_year, ndraw=100)
 bayes_R2(m.propnatCover_sq_year)
+get_prior(m.propnatCover_sq_year)
+qqnorm(residuals(m.propnatCover_sq_year)[,1])
+hist(residuals(m.propnatCover_sq_year)[,1])
 
 loo(m.propnatCover_numburn, m.propnatCover_sq, m.propnatCover_sq_year)
 
-
+# Run model: Num burn square + year + TSLF ####
 m.propnatCover_sq_year_TSLF <- brm(
   bf(cover ~ 1 + num_burn + I(num_burn^2) + year + TSLF_bin, 
      phi ~ num_burn+ I(num_burn^2) + year + TSLF_bin),
@@ -164,7 +176,29 @@ bayes_R2(m.propnatCover_sq_year_TSLF)
 
 loo(m.propnatCover_sq_year_TSLF, m.propnatCover_sq, m.propnatCover_sq_year)
 
-#CREATE FIGURE 
+# Run model: Num_burn square + year + site(random) ####
+m.propnatCover_sq_year_site <- brm(
+  bf(cover ~ 1 + num_burn + I(num_burn^2) + year + (1|Site), 
+     phi ~ num_burn+ I(num_burn^2) + year + (1|Site)),
+  data = propnativeCover,
+  family = Beta(),
+  chains = 4, iter = 2000, warmup = 1000,
+  cores=4,
+  seed = 1234)
+save(m.propnatCover_sq_year_site, file= "models/nativeCover_numburn_sq_year_site.rda")
+load("models/nativeCover_numburn_sq_year_site.rda")
+
+summary(m.propnatCover_sq_year_site)
+conditional_effects(m.propnatCover_sq_year_site)
+pp_check(m.propnatCover_sq_year_site, ndraws = 100)
+bayes_R2(m.propnatCover_sq_year_site)
+
+qqnorm(residuals(m.propnatCover_sq_year_site)[,1])
+hist(residuals(m.propnatCover_sq_year_site)[,1])
+
+loo(m.propnatCover_sq_year, m.propnatCover_sq_year_site)
+
+# CREATE FIGURE ####
 load("models/nativeCover_numburn_sq_year.rda")
 
 prior_summary(m.propnatCover_sq_year)
@@ -175,7 +209,7 @@ plogis(2.54 + -1.17) - plogis(2.54)
 #increased fire frequency decreases native cover by 13%
 
 
-#average marginal effect at different frequencies
+### average marginal effect at different frequencies ####
 m.propnatCover_sq_year %>% 
   emtrends(~ num_burn, var = "num_burn",
            at = list(num_burn = c(1,2,3, 4,5, 6)),
@@ -209,6 +243,7 @@ m.propnatCover_sq_year %>%
            regrid = "response") 
 
 
+#### plot predictions ####
 
 plot_predictions(m.propnatCover_sq_year,
                  condition = "num_burn",
@@ -243,6 +278,100 @@ ggplot(prop.cover.fitted, aes(x=num_burn))+
              aes(x=num_burn, y=cover),alpha=.2)+
   geom_jitter(data=propnativeCover, 
               aes(x=num_burn, y=cover), alpha =.2)+
+  labs(x=" ", y= "Proportion native cover",
+       fill="credible interval")+
+  scale_color_manual(values = cal_palette("sierra1")) +
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  theme(legend.position = "none")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))+
+  guides(fill = FALSE)
+
+# include site
+
+### average marginal effect at different frequencies ####
+m.propnatCover_sq_year_site %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") %>% 
+  gather_emmeans_draws() %>% 
+  ggplot(aes(x = .value, fill = factor(num_burn))) +
+  geom_vline(xintercept = 0) +
+  stat_halfeye(.width = c(0.8, 0.95), point_interval = "median_hdi",
+               slab_alpha = 0.75)+
+  scale_fill_manual(values = cal_palette("sierra1")) +
+  labs(x = "Average marginal effect of fire frequency", 
+       y = "Density", fill = "Fire Frequency",
+       caption = "80% and 95% credible intervals shown in black")+
+  theme(legend.position = "bottom")+
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0, size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.title = element_blank(),
+        legend.text=element_text(size=12))
+
+#overall average trend = -0.117
+emtrends(m.propnatCover_sq_year_site, ~ 1, var = "num_burn", 
+         regrid = "response")
+
+#slope depends on levels of FF
+m.propnatCover_sq_year_site %>% 
+  emtrends(~ num_burn, var = "num_burn",
+           at = list(num_burn = c(1,2,3, 4,5, 6)),
+           regrid = "response") 
+
+
+#### plot predictions ####
+
+plot_predictions(m.propnatCover_sq_year_site,
+                 condition = "num_burn",
+                 vcov = TRUE)+
+  geom_point(data = propnativeCover,
+             aes(num_burn, cover))
+
+summary(m.propnatCover_sq_year)
+summary(m.propnatCover_sq_year_site)
+
+nd <- propnativeCover %>% 
+  data_grid(num_burn=seq(1,6,by=.01),
+            year=c(2021, 2022),
+            Site = unique(propnativeCover$Site))
+
+prop.cover.fitted <- 
+  fitted(m.propnatCover_sq_year_site, 
+         newdata= nd,
+         re_formula = NULL,
+         probs = c(0.05, 0.95)) %>% 
+  as.data.frame() %>% 
+  cbind(nd) 
+
+prop.cover.fitted_sum <- prop.cover.fitted%>% 
+  group_by(num_burn, year) %>% 
+  dplyr::summarise(mean_estimate = mean(Estimate),
+                   mean_Q5 = mean(Q5),
+                   mean_Q95 = mean(Q95))
+
+
+ggplot(prop.cover.fitted_sum, aes(x=num_burn))+
+  geom_smooth(aes(y = mean_estimate, 
+                  ymin = mean_Q5, ymax = mean_Q95,
+                  fill = as.factor(year), 
+                  color = as.factor(year)),
+              stat = "identity", 
+              alpha = 1/4, size = 1/2)+
+  geom_point(aes(y = mean_estimate, color = as.factor(year)),
+             size = 2/3)+
+  geom_point(data=propnativeCover, 
+             aes(x=num_burn, y=cover),alpha=.2)+
+  geom_jitter(data=propnativeCover, 
+              aes(x=num_burn, y=cover), alpha =.2)+
   labs(x="Fire Frequency", y= "Proportion Native cover",
        fill="credible interval")+
   scale_color_manual(values = cal_palette("sierra1")) +
@@ -256,7 +385,6 @@ ggplot(prop.cover.fitted, aes(x=num_burn))+
         legend.title = element_blank(),
         legend.text=element_text(size=12))+
   guides(fill = FALSE)
-
 
 
 

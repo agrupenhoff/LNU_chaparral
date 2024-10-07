@@ -197,7 +197,7 @@ ggplot(shannon.fitted, aes(x=num_burn))+
              aes(x=num_burn, y=prop.nativeshan),alpha=.2)+
   geom_jitter(data=shannon, 
               aes(x=num_burn, y=prop.nativeshan), alpha =.2)+
-  labs(x="Fire Frequency", y= "Proportion Native Shannon Diversity",
+  labs(x="Fire frequency", y= "Proportion native shannon diversity",
        fill="credible interval")+
   scale_color_manual(values = cal_palette("sierra1")) +
   scale_fill_manual(values = cal_palette("sierra1")) +

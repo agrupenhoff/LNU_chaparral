@@ -224,7 +224,7 @@ ggplot(prop.rich.5m2.fitted, aes(x=num_burn))+
   geom_jitter(data=propnativeRich_small_5m2, 
               aes(x=num_burn, y=prop.native), alpha =.2)+
   #facet_wrap(~TSLF)+
-  labs(x="Fire Frequency", y= "Proportion Native richness",
+  labs(x="Fire frequency", y= "Proportion native richness",
        fill="credible interval")+
   scale_color_manual(values = cal_palette("sierra1")) +
   scale_fill_manual(values = cal_palette("sierra1")) +

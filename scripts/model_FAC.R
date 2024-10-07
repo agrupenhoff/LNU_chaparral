@@ -13,6 +13,7 @@ library(emmeans)
 library(calecopal)
 library(modelr)
 library(brmsmargins)
+library(ROCR)
 
 
 
@@ -74,7 +75,7 @@ ggplot(shrub_density_250_FAC, aes(x=num_burn, y=presence,
   geom_point()+
   geom_jitter()
 
-
+## MODEL ####
 priors <- c(set_prior("normal(0,1)", class = "b"),
             set_prior("student_t(3, 0, 1)", class = "Intercept"))
 # only 1 coef for this. t(3,0,1) is aki vehtarhi's favorite weakly informative prior.
@@ -150,6 +151,7 @@ m.shrubDensityFAC2_250 <- brm(data = shrub_density_250_FAC,
                               warmup = 1000, 
                               cores = 4, chains = 4)
 
+
 save(m.shrubDensityFAC2_250, file = "models/shrubDensityFAC2_250.rda")
 load("models/shrubDensityFAC2_250.rda")
 tidy(m.shrubDensityFAC2_250, effects = "fixed")
@@ -200,14 +202,17 @@ datagrid(model=m.shrubDensityFAC2,
   scale_fill_brewer(palette = "Blues")
 
 
-# Compute AUC for predicting Class with the model
+#### Compute AUC ####
+#for predicting Class with the model
 Prob <- predict(m.shrubDensityFAC2_250, type="response")
 Prob <- Prob[,1]
 Pred <- prediction(Prob, as.vector(pull(shrub_density_250_FAC, presence)))
 AUC <- performance(Pred, measure = "auc")
 AUC <- AUC@y.values[[1]]
 AUC
-#CREATE FIGURE
+
+# CREATE FIGURE ####
+load("models/shrubDensityFAC2_250.rda")
 summary(m.shrubDensityFAC2_250)
 plogis((-0.47 + -0.33)) - plogis(-0.47)
 
@@ -234,7 +239,7 @@ FAC.plot <- ggplot(FAC.fitted.250, aes(x=num_burn))+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   xlim(1,6)+
-  labs(x="Fire Frequency", y= "Proability of occurence",
+  labs(x="Fire frequency", y= "Probability of occurence",
        fill="credible interval")+
   scale_color_manual(values = c("mediumpurple", "seagreen4")) +
   scale_fill_manual(values = c("mediumpurple", "seagreen4")) +
@@ -251,9 +256,9 @@ FAC.plot <- ggplot(FAC.fitted.250, aes(x=num_burn))+
 FAC.plot
 
 
-#####
-#####
-# BY INDIVIDUAL SPECIES
+## BY INDIVIDUAL SPECIES ####
+
+#### ADFA ####
 
 shrub_density_ADFA <- shrub_density_250 %>%
   filter(spp == "ADFA")
@@ -285,7 +290,7 @@ Pred <- prediction(Prob, as.vector(pull(shrub_density_ADFA, presence)))
 AUC <- performance(Pred, measure = "auc")
 AUC <- AUC@y.values[[1]]
 AUC
-#CREATE FIGURE
+
 summary(m.shrubDensityADFA)
 plogis((1.20 + -0.70)) - plogis(1.20)
 
@@ -349,7 +354,7 @@ Pred <- prediction(Prob, as.vector(pull(shrub_density_LEPCAL, presence)))
 AUC <- performance(Pred, measure = "auc")
 AUC <- AUC@y.values[[1]]
 AUC
-#CREATE FIGURE
+## CREATE FIGURE INDIVIDUAL SPP ####
 summary(m.shrubDensityLEPCAL)
 plogis((0.16 + -0.66)) - plogis(0.16)
 
@@ -376,9 +381,9 @@ ADFA.plot <- ggplot(ADFA.fitted, aes(x=num_burn))+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   xlim(1,6)+
-  labs(x="Fire Frequency", y= "Proability of occurence",
+  labs(x="Fire frequency", y= "Probability of occurence",
        fill="credible interval",
-       title = "Adenostoma fasciculatum")+
+       title = "")+
   scale_color_manual(values = c("#63605F", "#985E5C")) +
   scale_fill_manual(values = c("#63605F", "#985E5C")) +
   theme(legend.position = "bottom")+
@@ -414,9 +419,9 @@ ERICAL.plot <- ggplot(ERICAL.fitted, aes(x=num_burn))+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   xlim(1,6)+
-  labs(x="Fire Frequency", y= "Proability of occurence",
+  labs(x="Fire frequency", y= "Probability of occurence",
        fill="credible interval",
-       title = "Eriodictyon californicum")+
+       title = "")+
   scale_color_manual(values = c("#63605F", "#985E5C")) +
   scale_fill_manual(values = c("#63605F", "#985E5C")) +
   theme(legend.position = "bottom")+
@@ -451,9 +456,9 @@ LEPCAL.plot <- ggplot(LEPCAL.fitted, aes(x=num_burn))+
   geom_point(aes(y = Estimate, color = as.factor(year)),
              size = 2/3)+
   xlim(1,6)+
-  labs(x="Fire Frequency", y= "Proability of occurence",
+  labs(x="Fire frequency", y= "Probability of occurence",
        fill="credible interval",
-       title = "Lepechinia calycina")+
+       title = "")+
   scale_color_manual(values = c("#63605F", "#985E5C")) +
   scale_fill_manual(values = c("#63605F", "#985E5C")) +
   theme(legend.position = "bottom")+

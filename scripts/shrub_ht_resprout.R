@@ -244,7 +244,7 @@ ADFA_resp_model7 |>
  #geom_jitter(data=ADFA_mortality_2021, 
 #             aes(x=num_burn, y=(postfire_ht_m)), alpha =.2)+
   ylim(0,1)+
-  labs(x="Fire Frequency", y= "Resprout Height (m)",
+  labs(x="Fire frequency", y= "Resprout height (m)",
        fill="credible interval",
        title = "")+
   #scale_color_manual(values = c( "#985E5C")) +
